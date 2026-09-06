@@ -22,6 +22,6 @@ class StageRegistry:
             raise KeyError(f"Unknown stage type '{type_name}'. Registered: {known}") from error
 
     def load_plugins(self) -> None:
-        for entry_point in entry_points(group="drawing_bot.stages"):
+        for entry_point in entry_points(group="doodle_bot.stages"):
             loaded = entry_point.load()
             self.register(loaded() if isinstance(loaded, type) else loaded)

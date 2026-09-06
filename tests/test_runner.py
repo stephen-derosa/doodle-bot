@@ -2,10 +2,11 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from drawing_bot.config import PipelineConfig, StageConfig
-from drawing_bot.contracts import Artifact, ModelProfile, StageRequest
-from drawing_bot.registry import StageRegistry
-from drawing_bot.runner import PipelineRunner
+from doodle_bot.config import ExecutorConfig, PipelineConfig, StageConfig
+from doodle_bot.contracts import Artifact, StageRequest
+from doodle_bot.execution import ExecutorRouter, LocalExecutor
+from doodle_bot.registry import StageRegistry
+from doodle_bot.runner import PipelineRunner
 
 
 class TestStage:
@@ -28,8 +29,11 @@ class RunnerTests(unittest.TestCase):
             source.write_bytes(b"png")
             registry = StageRegistry()
             registry.register(TestStage())
-            config = PipelineConfig("test", (StageConfig("copy", "test.copy", None, True, {}),), {})
-            result = PipelineRunner(registry).run(config, source, root / "run")
+            config = PipelineConfig(
+                "test", (StageConfig("copy", "test.copy", None, True, "local", {}),), {},
+                {"local": ExecutorConfig("local", "local", None, None, 60)},
+            )
+            result = PipelineRunner(registry, ExecutorRouter({"local": LocalExecutor()})).run(config, source, root / "run")
             self.assertEqual(result.path.read_bytes(), b"png")
             self.assertTrue((root / "run" / "provenance.json").exists())
 

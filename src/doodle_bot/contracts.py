@@ -22,6 +22,7 @@ class ModelProfile:
     model: str
     revision: str
     options: Mapping[str, Any]
+    parameters: Mapping[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
