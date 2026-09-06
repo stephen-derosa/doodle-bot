@@ -1,0 +1,21 @@
+name = "photo-to-line-art"
+model_profiles = "../models.toml"
+
+[[stages]]
+id = "scene"
+type = "image.scene_caricature"
+model_profile = "scene_v1"
+enabled = true
+options = { theme = "Fourth of July celebration" }
+
+[[stages]]
+id = "line-art"
+type = "image.line_art"
+model_profile = "line_art_v1"
+enabled = true
+
+[[stages]]
+id = "svg"
+type = "vector.svg"
+model_profile = "vector_svg_v1"
+enabled = true

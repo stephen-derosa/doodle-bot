@@ -1,0 +1,22 @@
+# Profiles are immutable choices recorded in output provenance.  Keep old
+# profiles when upgrading a model so prior output remains reproducible.
+
+[profiles.scene_v1]
+provider = "comfyui"
+model = "replace-with-your-image-model"
+revision = "pinned-model-revision"
+prompt_template = "2D colorful editorial caricature of {subject}, in a {theme} scene"
+negative_prompt = "photorealistic, text, watermark"
+options = { width = 1024, height = 1024, steps = 28, seed = -1 }
+
+[profiles.line_art_v1]
+provider = "opencv"
+model = "replace-with-line-art-processor"
+revision = "v1"
+options = { threshold = 180, min_stroke_width_px = 2, remove_small_components_px = 24 }
+
+[profiles.vector_svg_v1]
+provider = "potrace"
+model = "potrace"
+revision = "1.16"
+options = { turd_size = 24, opt_tolerance = 0.2 }

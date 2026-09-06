@@ -1,0 +1,19 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "drawing-bot"
+version = "0.1.0"
+description = "Extensible photo-to-caricature-to-line-art pipeline"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+drawing-bot = "drawing_bot.cli:main"
+
+[project.entry-points."drawing_bot.stages"]
+# Third-party packages can register a Stage subclass here.
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/drawing_bot"]
