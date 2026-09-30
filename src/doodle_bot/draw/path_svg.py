@@ -191,16 +191,44 @@ def optimize_paths(
     return ordered
 
 
+def join_close_paths(
+    paths: Sequence[Sequence[tuple[float, float]]],
+    max_gap: float,
+) -> list[list[tuple[float, float]]]:
+    """Join consecutive routed strokes separated by at most ``max_gap``."""
+
+    if max_gap < 0:
+        raise ValueError("join distance must not be negative")
+    joined: list[list[tuple[float, float]]] = []
+    for source in paths:
+        path = list(source)
+        if not path:
+            continue
+        if joined and hypot(
+            path[0][0] - joined[-1][-1][0],
+            path[0][1] - joined[-1][-1][1],
+        ) <= max_gap:
+            if path[0] != joined[-1][-1]:
+                joined[-1].append(path[0])
+            joined[-1].extend(path[1:])
+        else:
+            joined.append(path)
+    return joined
+
+
 def read_paths_svg(
     path: Path,
     *,
     curve_tolerance: float = 0.25,
     optimize: bool = True,
+    join_distance: float = 0.0,
 ) -> list[list[tuple[float, float]]]:
     """Read and flatten visible SVG geometry into bottom-left plot paths."""
 
     if curve_tolerance <= 0:
         raise ValueError("curve_tolerance must be positive")
+    if join_distance < 0:
+        raise ValueError("join distance must not be negative")
     try:
         root = ET.parse(path).getroot()
     except ET.ParseError as error:
@@ -250,7 +278,8 @@ def read_paths_svg(
 
     if not svg_paths:
         raise ValueError("SVG contains no drawable vector geometry")
-    return optimize_paths(svg_paths) if optimize else svg_paths
+    paths = optimize_paths(svg_paths) if optimize else svg_paths
+    return join_close_paths(paths, join_distance) if join_distance > 0 else paths
 
 
 def svg_to_gcode(
@@ -260,6 +289,7 @@ def svg_to_gcode(
     max_step: float = 1.0,
     pen_up_z: float = 1.0,
     pen_down_z: float = 0.0,
+    join_distance: float = 0.0,
 ) -> tuple[Move, ...]:
     """Convert optimized, adaptively flattened SVG geometry to G-code."""
 
@@ -268,7 +298,11 @@ def svg_to_gcode(
     if max_step <= 0:
         raise ValueError("max_step must be positive")
     moves = paths_to_moves(
-        read_paths_svg(input_path, curve_tolerance=max_step / 4),
+        read_paths_svg(
+            input_path,
+            curve_tolerance=max_step / 4,
+            join_distance=join_distance,
+        ),
         max_step,
     )
     write_moves_gcode(

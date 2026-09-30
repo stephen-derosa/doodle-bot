@@ -18,6 +18,12 @@ def add_draw_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--input", type=Path, default=DEFAULT_IMAGE, help=f"source image or SVG (default: {DEFAULT_IMAGE})")
     parser.add_argument("--width", type=float, default=400.0, help="plot/robot canvas width in coordinate units")
     parser.add_argument("--max-step", type=float, default=1.0, help="maximum distance per movement")
+    parser.add_argument(
+        "--join-distance",
+        type=float,
+        default=0.0,
+        help="draw across SVG stroke gaps up to this distance (default: disabled)",
+    )
     parser.add_argument("--pixel-width", type=int, default=400, help="processing canvas width in pixels")
     parser.add_argument("--pixel-height", type=int, default=600, help="processing canvas height in pixels")
     parser.add_argument("--pen-up-z", type=float, default=1.0, help="Z coordinate for a lifted pen")
@@ -76,6 +82,7 @@ def run_draw_command(args: argparse.Namespace) -> None:
             svg_path,
             gcode_path,
             max_step=args.max_step,
+            join_distance=args.join_distance,
             pen_up_z=args.pen_up_z,
             pen_down_z=args.pen_down_z,
         )

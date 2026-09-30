@@ -70,6 +70,9 @@ polylines, polygons, rectangles, circles, ellipses, cubic/quadratic Béziers,
 and arcs. It applies nested SVG transforms, adaptively flattens curves, then
 orients and reorders strokes with nearest-endpoint routing plus 2-opt to reduce
 pen-up travel. G-code movement spacing remains bounded by `--max-step`.
+Pass `--join-distance N` to replace pen lifts across gaps of at most `N` SVG
+units with short drawn connectors; it is disabled by default because joining
+strokes changes the artwork slightly.
 
 Render an existing SO-101 JSON drawing with the interactive GUI:
 

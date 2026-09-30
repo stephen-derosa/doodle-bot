@@ -161,7 +161,8 @@ def build_segments(drawing: Drawing, cfg: Config) -> list[Segment]:
     for s in strokes:
         pts = densify(s.points, 2.0)
         first, last = pts[0], pts[-1]
-        prev_xy = segs[-1].pts[-1, :2] if segs else first
+        # Every run starts explicitly at the canvas origin with the pen raised.
+        prev_xy = segs[-1].pts[-1, :2] if segs else np.array([0.0, 0.0])
         # travel (pen up) to above the stroke start
         travel = np.array([[*prev_xy, zu], [*first, zu]])
         if np.linalg.norm(travel[0] - travel[1]) > 1e-6:

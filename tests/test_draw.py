@@ -8,6 +8,7 @@ import numpy as np
 from PIL import Image
 
 from doodle_bot.draw.drawing import run_draw_command
+from doodle_bot.draw.motion import Move
 from doodle_bot.draw.tracer import image_to_mask, mask_to_strokes, optimize_stroke_order, strokes_to_moves
 
 
@@ -30,6 +31,7 @@ class DrawingTests(unittest.TestCase):
 
     def test_every_move_is_small(self) -> None:
         moves = strokes_to_moves([[(0, 4), (0, 3)]], (5, 5), width=100, max_step=2)
+        self.assertEqual(moves[0], Move(0.0, 0.0, False))
         previous = (0.0, 0.0)
         for move in moves:
             distance = np.hypot(move.x - previous[0], move.y - previous[1])
@@ -59,6 +61,7 @@ class DrawingTests(unittest.TestCase):
                 input=input_path,
                 width=5.0,
                 max_step=1.0,
+                join_distance=0.0,
                 pixel_width=5,
                 pixel_height=5,
                 pen_up_z=1.0,
@@ -91,6 +94,7 @@ class DrawingTests(unittest.TestCase):
                 input=input_path,
                 width=5.0,
                 max_step=1.0,
+                join_distance=0.0,
                 pixel_width=5,
                 pixel_height=5,
                 pen_up_z=1.0,

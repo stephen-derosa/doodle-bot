@@ -2,8 +2,8 @@ import numpy as np
 import pytest
 
 from doodle.config import Calibration, Config, PaperFrame
-from doodle.planner import PlanError, densify, order_strokes, plan, time_parameterise
-from doodle.shapes import GENERATORS, Stroke, make
+from doodle.planner import PlanError, build_segments, densify, order_strokes, plan, time_parameterise
+from doodle.shapes import GENERATORS, Drawing, Stroke, make
 
 
 def setup():
@@ -37,6 +37,16 @@ def test_order_strokes_prefers_nearest_and_reverses():
     out = order_strokes([b, a], start=(0.0, 0.0))
     assert np.allclose(out[0].points[0], (0, 0))
     assert np.allclose(out[1].points[0], (11, 0))
+
+
+def test_segments_start_at_canvas_origin_with_pen_up():
+    cfg, _ = setup()
+    drawing = Drawing("line", [Stroke(np.array([[10.0, 10.0], [20.0, 10.0]]))])
+
+    segments = build_segments(drawing, cfg)
+
+    assert not segments[0].pen_down
+    assert np.allclose(segments[0].pts[0], (0.0, 0.0, cfg.motion.pen_up_z))
 
 
 @pytest.mark.parametrize("name", sorted(GENERATORS))

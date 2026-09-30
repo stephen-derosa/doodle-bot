@@ -13,6 +13,12 @@ def add_svg_to_gcode_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--input", required=True, type=Path, help="source centerline SVG")
     parser.add_argument("--output", required=True, type=Path, help="destination G-code file")
     parser.add_argument("--max-step", type=float, default=1.0, help="maximum distance per movement")
+    parser.add_argument(
+        "--join-distance",
+        type=float,
+        default=0.0,
+        help="draw across gaps up to this many SVG units (default: disabled)",
+    )
     parser.add_argument("--pen-up-z", type=float, default=1.0, help="Z coordinate for a lifted pen")
     parser.add_argument("--pen-down-z", type=float, default=0.0, help="Z coordinate for a lowered pen")
 
@@ -24,6 +30,7 @@ def run_svg_to_gcode_command(args: argparse.Namespace) -> None:
             args.input,
             args.output,
             max_step=args.max_step,
+            join_distance=args.join_distance,
             pen_up_z=args.pen_up_z,
             pen_down_z=args.pen_down_z,
         )

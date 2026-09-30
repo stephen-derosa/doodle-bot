@@ -5,6 +5,7 @@ from tempfile import TemporaryDirectory
 from doodle_bot.draw.motion import paths_to_moves
 from doodle_bot.draw.path_gcode import read_moves_gcode
 from doodle_bot.draw.path_svg import (
+    join_close_paths,
     optimize_paths,
     read_paths_svg,
     svg_to_gcode,
@@ -86,6 +87,25 @@ class PathSvgTests(unittest.TestCase):
                 [(90.0, 0.0), (100.0, 0.0)],
             ],
         )
+
+    def test_joins_close_routed_strokes(self) -> None:
+        paths = [
+            [(0.0, 0.0), (2.0, 0.0)],
+            [(3.0, 0.0), (5.0, 0.0)],
+            [(10.0, 0.0), (12.0, 0.0)],
+        ]
+
+        self.assertEqual(
+            join_close_paths(paths, max_gap=1.0),
+            [
+                [(0.0, 0.0), (2.0, 0.0), (3.0, 0.0), (5.0, 0.0)],
+                [(10.0, 0.0), (12.0, 0.0)],
+            ],
+        )
+
+    def test_rejects_negative_join_distance(self) -> None:
+        with self.assertRaisesRegex(ValueError, "must not be negative"):
+            join_close_paths([], max_gap=-1.0)
 
 
 if __name__ == "__main__":

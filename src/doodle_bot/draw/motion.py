@@ -40,8 +40,10 @@ def paths_to_moves(
 
     if max_step <= 0:
         raise ValueError("max_step must be positive")
-    moves: list[Move] = []
     current = (0.0, 0.0)
+    # Make the coordinate-system origin an explicit pen-up waypoint instead of
+    # merely treating it as the implicit start of interpolation.
+    moves: list[Move] = [Move(*current, pen_down=False)]
     for path in paths:
         if not path:
             continue
