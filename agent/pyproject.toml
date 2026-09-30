@@ -9,6 +9,7 @@ dependencies = [
     "livekit-plugins-ai-coustics~=0.3",
     "openai>=2",
     "python-dotenv",
+    "scikit-image>=0.25.2",
 ]
 
 [tool.uv]
