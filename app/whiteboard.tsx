@@ -7,7 +7,9 @@ import PaintWindow from "./paint-window";
 
 const encoder = new TextEncoder();
 
-const ROBOT_IDENTITY = 'arm';
+// Third coord in each "<x>,<y>,<z>" payload. Swap if the arm reads z the other way.
+const PEN_UP_Z = 1;
+const PEN_DOWN_Z = 0;
 
 const PX_PER_MM = 5;
 
@@ -26,6 +28,7 @@ export default function Whiteboard() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const isDrawing = useRef(false);
   const coordsRef = useRef<HTMLSpanElement>(null);
+  const lastPoint = useRef({ x: 0, y: 0 });
 
   const session = useSession(tokenSource);
 
@@ -69,23 +72,9 @@ export default function Whiteboard() {
     ctx.beginPath();
     ctx.moveTo(x, y);
 
-    session.room.localParticipant.performRpc({
-      destinationIdentity: ROBOT_IDENTITY,
-      method: 'down',
-      payload: '',
-    });
-
-    const xInMm = x / PX_PER_MM;
-    const yInMm = (HEIGHT_PX - y) / PX_PER_MM;
-
-    const xInMmBounded = Math.min(Math.max(0, xInMm), WIDTH_PX);
-    const yInMmBounded = Math.min(Math.max(0, yInMm), HEIGHT_PX);
-
-    console.log(`x ${Math.round(xInMmBounded)}, y: ${Math.round(yInMmBounded)}`);
-
-    const payload = encoder.encode(`${xInMmBounded},${yInMmBounded}`);
-    console.log('payload down', payload);
-    track?.tryPush({ payload });
+    // Travel to the stroke start with the pen up, then lower it.
+    push(x, y, PEN_UP_Z);
+    push(x, y, PEN_DOWN_Z);
   }
 
   function handlePointerMove(e: React.PointerEvent<HTMLCanvasElement>) {
@@ -101,21 +90,20 @@ export default function Whiteboard() {
     ctx.lineTo(x, y);
     ctx.stroke();
 
-    const xInMm = x / PX_PER_MM;
-    const yInMm = (HEIGHT_PX - y) / PX_PER_MM;
-
-    const xInMmBounded = Math.min(Math.max(0, xInMm), WIDTH_PX);
-    const yInMmBounded = Math.min(Math.max(0, yInMm), HEIGHT_PX);
-
-    console.log(`x ${Math.round(xInMmBounded)}, y: ${Math.round(yInMmBounded)}`);
-
-    const payload = encoder.encode(`${xInMmBounded},${yInMmBounded}`);
-    console.log('payload', payload);
-    track?.tryPush({ payload });
+    push(x, y, PEN_DOWN_Z);
   }
 
   function handlePointerUp() {
+    if (!isDrawing.current) return;
     isDrawing.current = false;
+    push(lastPoint.current.x, lastPoint.current.y, PEN_UP_Z);
+  }
+
+  function push(x: number, y: number, z: number) {
+    lastPoint.current = { x, y };
+    const xInMm = Math.min(Math.max(0, x / PX_PER_MM), WIDTH_MM);
+    const yInMm = Math.min(Math.max(0, (HEIGHT_PX - y) / PX_PER_MM), HEIGHT_MM);
+    track?.tryPush({ payload: encoder.encode(`${xInMm},${yInMm},${z}`) });
   }
 
   // Written straight to the DOM so hovering doesn't re-render the component.
