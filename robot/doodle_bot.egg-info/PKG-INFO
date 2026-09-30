@@ -1,0 +1,9 @@
+Metadata-Version: 2.4
+Name: doodle-bot
+Version: 0.1.0
+Summary: Turn an SO-101 arm into a pen-plotting doodle robot
+Requires-Python: >=3.12
+Requires-Dist: numpy>=2.0
+Requires-Dist: pyserial>=3.5
+Requires-Dist: pyyaml>=6.0
+Requires-Dist: pillow>=10.0
