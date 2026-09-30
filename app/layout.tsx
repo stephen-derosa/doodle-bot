@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Whiteboard",
+  title: "untitled - Paint",
   description: "A simple drawing whiteboard",
 };
 

@@ -24,3 +24,126 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* ---- Windows 98 / MS Paint chrome ---- */
+
+.win98 {
+  background: #c0c0c0;
+  color: #000;
+  font-family: "Pixelated MS Sans Serif", "MS Sans Serif", "Microsoft Sans Serif", Tahoma, Geneva, sans-serif;
+  font-size: 11px;
+  -webkit-font-smoothing: none;
+  user-select: none;
+}
+
+.win98-raised {
+  box-shadow:
+    inset -1px -1px #0a0a0a,
+    inset 1px 1px #dfdfdf,
+    inset -2px -2px #808080,
+    inset 2px 2px #ffffff;
+}
+
+.win98-sunken {
+  box-shadow:
+    inset -1px -1px #ffffff,
+    inset 1px 1px #808080,
+    inset -2px -2px #dfdfdf,
+    inset 2px 2px #0a0a0a;
+}
+
+.win98-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 18px;
+  padding: 0 2px 0 3px;
+  background: linear-gradient(90deg, #000080, #1084d0);
+  color: #fff;
+  font-weight: bold;
+}
+
+.win98-titlebutton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 14px;
+  background: #c0c0c0;
+  box-shadow:
+    inset -1px -1px #0a0a0a,
+    inset 1px 1px #ffffff,
+    inset -2px -2px #808080,
+    inset 2px 2px #dfdfdf;
+}
+
+.win98-titlebutton:active {
+  box-shadow:
+    inset -1px -1px #ffffff,
+    inset 1px 1px #0a0a0a,
+    inset -2px -2px #dfdfdf,
+    inset 2px 2px #808080;
+}
+
+.win98-menuitem {
+  padding: 1px 6px;
+}
+
+.win98-menuitem:hover {
+  background: #000080;
+  color: #fff;
+}
+
+.win98-tool {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 25px;
+  height: 25px;
+  background: #c0c0c0;
+  box-shadow:
+    inset -1px -1px #0a0a0a,
+    inset 1px 1px #ffffff,
+    inset -2px -2px #808080,
+    inset 2px 2px #dfdfdf;
+}
+
+.win98-tool-active {
+  background-color: #fff;
+  background-image: repeating-conic-gradient(#c0c0c0 0 25%, #fff 0 50%);
+  background-size: 2px 2px;
+  box-shadow:
+    inset -1px -1px #ffffff,
+    inset 1px 1px #0a0a0a,
+    inset -2px -2px #dfdfdf,
+    inset 2px 2px #808080;
+}
+
+.win98-canvas-area {
+  background: #808080;
+  box-shadow:
+    inset -1px -1px #ffffff,
+    inset 1px 1px #808080,
+    inset -2px -2px #dfdfdf,
+    inset 2px 2px #0a0a0a;
+  padding: 2px;
+}
+
+.win98-handle {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  background: #000080;
+}
+
+.win98-status {
+  height: 18px;
+  padding: 2px 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  box-shadow: inset -1px -1px #ffffff, inset 1px 1px #808080;
+}
+
+.win98-desktop {
+  background: #008080;
+}

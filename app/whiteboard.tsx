@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { LocalDataTrack, TokenSource } from "livekit-client";
 import { useSession } from "@livekit/components-react";
+import PaintWindow from "./paint-window";
 
 const encoder = new TextEncoder();
 
@@ -24,6 +25,7 @@ const tokenSource = TokenSource.literal({
 export default function Whiteboard() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const isDrawing = useRef(false);
+  const coordsRef = useRef<HTMLSpanElement>(null);
 
   const session = useSession(tokenSource);
 
@@ -87,6 +89,7 @@ export default function Whiteboard() {
   }
 
   function handlePointerMove(e: React.PointerEvent<HTMLCanvasElement>) {
+    showCoords(e);
     if (!isDrawing.current) return;
     const ctx = e.currentTarget.getContext("2d");
     if (!ctx) {
@@ -115,17 +118,31 @@ export default function Whiteboard() {
     isDrawing.current = false;
   }
 
+  // Written straight to the DOM so hovering doesn't re-render the component.
+  function showCoords(e: React.PointerEvent<HTMLCanvasElement>) {
+    if (!coordsRef.current) return;
+    const { x, y } = getPoint(e);
+    coordsRef.current.textContent = `${Math.round(x)},${Math.round(y)}`;
+  }
+
+  function clearCoords() {
+    if (coordsRef.current) coordsRef.current.textContent = "";
+  }
+
   return (
-    <canvas
-      ref={canvasRef}
-      width={WIDTH_PX}
-      height={HEIGHT_PX}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerUp}
-      className="w-full bg-white border border-zinc-300 shadow-sm touch-none cursor-crosshair"
-      style={{ width: WIDTH_PX, height: HEIGHT_PX }}
-    />
+    <PaintWindow coordsRef={coordsRef} sizeLabel={`${WIDTH_PX}x${HEIGHT_PX}`}>
+      <canvas
+        ref={canvasRef}
+        width={WIDTH_PX}
+        height={HEIGHT_PX}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+        onPointerLeave={clearCoords}
+        className="block bg-white touch-none cursor-crosshair"
+        style={{ width: WIDTH_PX, height: HEIGHT_PX }}
+      />
+    </PaintWindow>
   );
 }
