@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>doodle twin</title>
+<style>
+  :root { --bg:#14171c; --panel:#1d2229; --fg:#d6dbe3; --dim:#8b95a5; --ok:#5fcf80; --bad:#ff6b6b; --warn:#ffb454; }
+  html, body { margin:0; height:100%; background:var(--bg); color:var(--fg); font:13px/1.4 ui-monospace, Menlo, Consolas, monospace; }
+  #view { position:fixed; inset:0; }
+  #hud { position:fixed; top:12px; left:12px; width:330px; background:color-mix(in srgb, var(--panel) 92%, transparent);
+         border:1px solid #2a313b; border-radius:8px; padding:10px 12px; pointer-events:none; }
+  #hud h1 { margin:0 0 6px; font-size:13px; font-weight:600; letter-spacing:.04em; }
+  #hud .row { display:grid; grid-template-columns: 96px 46px 62px 1fr; gap:6px; align-items:center; padding:2px 0; }
+  #hud .row.head { color:var(--dim); border-bottom:1px solid #2a313b; margin-bottom:3px; }
+  .bar { position:relative; height:8px; background:#0e1115; border-radius:4px; overflow:hidden; }
+  .bar i { position:absolute; top:0; bottom:0; width:2px; background:var(--ok); }
+  .bar i.near { background:var(--warn); }
+  .bar i.out { background:var(--bad); }
+  .bar b { position:absolute; top:0; bottom:0; width:1px; background:#3b4452; left:50%; }
+  #meta { margin-top:8px; color:var(--dim); white-space:pre; }
+  #meta .ok { color:var(--ok); } #meta .bad { color:var(--bad); } #meta .warn { color:var(--warn); }
+  #ctl { position:fixed; right:12px; top:12px; display:flex; gap:6px; }
+  #ctl button { background:var(--panel); color:var(--fg); border:1px solid #2a313b; border-radius:6px; padding:6px 10px; cursor:pointer; font:inherit; }
+  #ctl button:hover { border-color:#4a5568; }
+  #ctl button.on { border-color:var(--ok); }
+  #help { position:fixed; left:12px; bottom:10px; color:var(--dim); }
+</style>
+</head>
+<body>
+<canvas id="view"></canvas>
+
+<div id="hud">
+  <h1>doodle twin</h1>
+  <div class="row head"><span>joint</span><span>ticks</span><span>deg</span><span>travel</span></div>
+  <div id="joints"></div>
+  <div id="meta">connecting…</div>
+</div>
+
+<div id="ctl">
+  <button id="follow" title="keep the camera target on the pen tip">follow tip</button>
+  <button id="clear" title="erase the drawn trail">clear trail</button>
+  <button id="reset" title="reset the camera">reset view</button>
+</div>
+<div id="help">drag: orbit · shift-drag / right-drag: pan · wheel: zoom</div>
+
+<script src="/three.min.js"></script>
+<script>
+(() => {
+  // ---- scene ---------------------------------------------------------------------------------
+  // World frame is the robot's: x forward, y left, z up (mm). Three.js is y-up by default, so
+  // the camera's up vector is set to z and everything is built directly in world coordinates.
+  const canvas = document.getElementById('view');
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x14171c);
+  const camera = new THREE.PerspectiveCamera(45, 1, 1, 5000);
+  camera.up.set(0, 0, 1);
+
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x3a4050, 1.0));
+  const sun = new THREE.DirectionalLight(0xffffff, 0.7); sun.position.set(300, -400, 600); scene.add(sun);
+
+  const grid = new THREE.GridHelper(1000, 20, 0x2c3440, 0x222933);
+  grid.rotation.x = Math.PI / 2;              // GridHelper lies in XZ; lay it on the XY table
+  scene.add(grid);
+  const axes = new THREE.AxesHelper(60); scene.add(axes);
+
+  const mat = {
+    base:  new THREE.MeshStandardMaterial({ color: 0x5b6472, roughness: .7 }),
+    link:  new THREE.MeshStandardMaterial({ color: 0xc9d1dc, roughness: .5 }),
+    joint: new THREE.MeshStandardMaterial({ color: 0x4f8ef7, roughness: .4 }),
+    pen:   new THREE.MeshStandardMaterial({ color: 0xffb454, roughness: .4 }),
+    tipUp: new THREE.MeshStandardMaterial({ color: 0x8b95a5 }),
+    tipDn: new THREE.MeshStandardMaterial({ color: 0xff4d4d, emissive: 0x551111 }),
+    paper: new THREE.MeshStandardMaterial({ color: 0xf2f2ea, roughness: .95, side: THREE.DoubleSide, transparent: true, opacity: .55 }),
+    paperEdge: new THREE.LineBasicMaterial({ color: 0x4f8ef7 }),
+    canvasEdge: new THREE.LineBasicMaterial({ color: 0xff5c5c }),
+    trail: new THREE.LineBasicMaterial({ color: 0x222222 }),
+    ghost: new THREE.LineBasicMaterial({ color: 0x4f8ef7, transparent: true, opacity: .35 }),
+  };
+
+  // Base column: a cylinder standing on the table, height = lift_z (set on first frame).
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(28, 32, 1, 32), mat.base);
+  base.rotation.x = Math.PI / 2;               // cylinder axis (y) -> world z
+  scene.add(base);
+
+  // Skeleton: N-1 link cylinders between N chain points, spheres at the joints.
+  const unitCyl = new THREE.CylinderGeometry(1, 1, 1, 16);
+  const links = [], joints = [];
+  const LINK_R = [16, 10, 9, 8, 7, 2.2];       // pan column, upper arm, forearm, wrist, holder, pen
+  for (let i = 0; i < 6; i++) {
+    const m = new THREE.Mesh(unitCyl, i === 5 ? mat.pen : mat.link);
+    scene.add(m); links.push(m);
+  }
+  for (let i = 0; i < 6; i++) {
+    const s = new THREE.Mesh(new THREE.SphereGeometry(i === 0 ? 1 : 11, 20, 14), mat.joint);
+    scene.add(s); joints.push(s);
+  }
+  const tip = new THREE.Mesh(new THREE.SphereGeometry(4, 18, 12), mat.tipUp); scene.add(tip);
+
+  // Paper and canvas outlines; the paper also gets a translucent sheet.
+  const paperEdge = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints([...Array(4)].map(() => new THREE.Vector3())), mat.paperEdge);
+  const canvasEdge = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints([...Array(4)].map(() => new THREE.Vector3())), mat.canvasEdge);
+  const sheet = new THREE.Mesh(new THREE.BufferGeometry(), mat.paper);
+  scene.add(paperEdge, canvasEdge, sheet);
+
+  // Ink trail: preallocated line, extended while the pen is down.
+  const TRAIL_MAX = 20000;
+  const trailPos = new Float32Array(TRAIL_MAX * 3);
+  const trailGeo = new THREE.BufferGeometry();
+  trailGeo.setAttribute('position', new THREE.BufferAttribute(trailPos, 3));
+  trailGeo.setDrawRange(0, 0);
+  const trail = new THREE.Line(trailGeo, mat.trail); scene.add(trail);
+  let trailN = 0;
+  function trailPush(p) {
+    if (trailN >= TRAIL_MAX) return;
+    trailPos.set(p, trailN * 3); trailN++;
+    trailGeo.attributes.position.needsUpdate = true;
+    trailGeo.setDrawRange(0, trailN);
+  }
+  function trailClear() { trailN = 0; trailGeo.setDrawRange(0, 0); }
+
+  const up = new THREE.Vector3(0, 1, 0), tmpA = new THREE.Vector3(), tmpB = new THREE.Vector3(), tmpD = new THREE.Vector3();
+  function placeCylinder(mesh, a, b, radius) {
+    tmpA.fromArray(a); tmpB.fromArray(b); tmpD.subVectors(tmpB, tmpA);
+    const len = Math.max(tmpD.length(), 0.01);
+    mesh.position.copy(tmpA).addScaledVector(tmpD, 0.5);
+    mesh.scale.set(radius, len, radius);
+    mesh.quaternion.setFromUnitVectors(up, tmpD.normalize());
+  }
+  function setLoop(line, corners) {
+    const pos = line.geometry.attributes.position;
+    corners.forEach((c, i) => pos.setXYZ(i, c[0], c[1], c[2]));
+    pos.needsUpdate = true;
+    line.geometry.computeBoundingSphere();
+  }
+  function setSheet(corners) {
+    const v = corners.flat();
+    sheet.geometry.setAttribute('position', new THREE.Float32BufferAttribute([
+      ...v.slice(0, 3), ...v.slice(3, 6), ...v.slice(6, 9),
+      ...v.slice(0, 3), ...v.slice(6, 9), ...v.slice(9, 12)], 3));
+    sheet.geometry.computeVertexNormals();
+  }
+
+  // ---- camera: a small orbit controller (no OrbitControls dependency) ------------------------
+  const cam = { target: new THREE.Vector3(150, 0, 20), theta: -0.9, phi: 0.95, r: 650, followTip: false };
+  const HOME = { ...cam, target: cam.target.clone() };
+  function applyCamera() {
+    const sp = Math.sin(cam.phi), cp = Math.cos(cam.phi);
+    camera.position.set(cam.target.x + cam.r * sp * Math.cos(cam.theta),
+                        cam.target.y + cam.r * sp * Math.sin(cam.theta),
+                        cam.target.z + cam.r * cp);
+    camera.lookAt(cam.target);
+  }
+  let drag = null;
+  canvas.addEventListener('pointerdown', e => { drag = { x: e.clientX, y: e.clientY, pan: e.button === 2 || e.shiftKey }; canvas.setPointerCapture(e.pointerId); });
+  canvas.addEventListener('pointerup', () => drag = null);
+  canvas.addEventListener('pointermove', e => {
+    if (!drag) return;
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y; drag.x = e.clientX; drag.y = e.clientY;
+    if (drag.pan) {
+      const right = new THREE.Vector3().crossVectors(camera.getWorldDirection(new THREE.Vector3()), camera.up).normalize();
+      const k = cam.r * 0.0015;
+      cam.target.addScaledVector(right, -dx * k).addScaledVector(camera.up, dy * k);
+      cam.followTip = false; ui.follow.classList.remove('on');
+    } else {
+      cam.theta -= dx * 0.006;
+      cam.phi = Math.min(Math.max(cam.phi - dy * 0.006, 0.05), Math.PI - 0.05);
+    }
+    applyCamera();
+  });
+  canvas.addEventListener('wheel', e => { e.preventDefault(); cam.r = Math.min(Math.max(cam.r * Math.exp(e.deltaY * 0.001), 80), 4000); applyCamera(); }, { passive: false });
+  canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+  function resize() {
+    const w = innerWidth, h = innerHeight;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h; camera.updateProjectionMatrix();
+  }
+  addEventListener('resize', resize); resize(); applyCamera();
+
+  // ---- HUD -----------------------------------------------------------------------------------
+  const ui = { joints: document.getElementById('joints'), meta: document.getElementById('meta'),
+               follow: document.getElementById('follow'), clear: document.getElementById('clear'), reset: document.getElementById('reset') };
+  ui.follow.onclick = () => { cam.followTip = !cam.followTip; ui.follow.classList.toggle('on', cam.followTip); };
+  ui.clear.onclick = trailClear;
+  ui.reset.onclick = () => { Object.assign(cam, HOME, { target: HOME.target.clone() }); ui.follow.classList.remove('on'); applyCamera(); };
+
+  const rows = [];
+  function ensureRows(n) {
+    while (rows.length < n) {
+      const el = document.createElement('div'); el.className = 'row';
+      el.innerHTML = '<span class="n"></span><span class="t"></span><span class="d"></span><div class="bar"><b></b><i></i></div>';
+      ui.joints.appendChild(el);
+      rows.push({ el, n: el.querySelector('.n'), t: el.querySelector('.t'), d: el.querySelector('.d'), i: el.querySelector('i') });
+    }
+  }
+  function hud(s) {
+    ensureRows(s.joints.length);
+    s.joints.forEach((j, k) => {
+      const r = rows[k];
+      r.n.textContent = j.name; r.t.textContent = j.ticks.toFixed(0); r.d.textContent = j.deg.toFixed(1);
+      const span = j.max_deg - j.min_deg, f = span > 0 ? (j.deg - j.min_deg) / span : 0.5;
+      const margin = Math.min(j.deg - j.min_deg, j.max_deg - j.deg);
+      r.i.style.left = (Math.min(Math.max(f, 0), 1) * 100) + '%';
+      r.i.className = margin < 0 ? 'out' : margin < 5 ? 'near' : '';
+      r.n.style.color = j.alive === false ? 'var(--bad)' : '';
+    });
+    const pd = s.pen_down === null ? '?' : s.pen_down ? '<span class="bad">DOWN</span>' : 'up';
+    const cal = (s.joints_calibrated ? '<span class="ok">joints</span>' : '<span class="warn">joints uncal</span>') + ' · ' +
+                (s.paper.calibrated ? '<span class="ok">paper</span>' : '<span class="warn">paper nominal</span>');
+    const trel = s.t_rel == null ? '' : `\nlog t   ${s.t_rel.toFixed(2)} s`;
+    ui.meta.innerHTML =
+      `source  ${s.source}${trel}\n` +
+      `tip     x ${s.tip[0].toFixed(1)}  y ${s.tip[1].toFixed(1)}  z ${s.tip[2].toFixed(1)}  (paper z ${s.paper.z.toFixed(1)})\n` +
+      `pen     ${pd}   tilt ${(Math.acos(Math.min(1, Math.abs(s.pen_dir[2]))) * 180 / Math.PI).toFixed(1)}°\n` +
+      `calib   ${cal}\n` +
+      (s.error ? `<span class="bad">error   ${s.error}</span>\n` : '') +
+      `frame   #${s.seq}`;
+  }
+
+  // ---- frame update --------------------------------------------------------------------------
+  let lastPaperKey = '';
+  function update(s) {
+    base.scale.y = s.geometry.lift_z; base.position.z = s.geometry.lift_z / 2;
+    const c = s.chain;
+    for (let i = 0; i < 6; i++) placeCylinder(links[i], c[i], c[i + 1], LINK_R[i]);
+    for (let i = 0; i < 6; i++) joints[i].position.fromArray(c[i]);
+    tip.position.fromArray(s.tip);
+    tip.material = s.pen_down ? mat.tipDn : mat.tipUp;
+    if (s.pen_down) trailPush(s.tip);
+
+    const key = JSON.stringify([s.paper.corners, s.canvas.corners]);
+    if (key !== lastPaperKey) { setLoop(paperEdge, s.paper.corners); setLoop(canvasEdge, s.canvas.corners); setSheet(s.paper.corners); lastPaperKey = key; }
+    mat.paperEdge.color.set(s.paper.calibrated ? 0x4f8ef7 : 0x6d7683);
+    if (cam.followTip) { cam.target.lerp(new THREE.Vector3().fromArray(s.tip), 0.2); applyCamera(); }
+    hud(s);
+  }
+
+  // ---- stream --------------------------------------------------------------------------------
+  let lastSeq = 0, lastMsg = performance.now();
+  const es = new EventSource('/events');
+  es.onmessage = e => { const s = JSON.parse(e.data); if (s.seq === undefined) return; lastSeq = s.seq; lastMsg = performance.now(); update(s); };
+  es.onerror = () => { ui.meta.innerHTML = '<span class="bad">stream lost, reconnecting…</span>'; };
+
+  function loop() {
+    if (performance.now() - lastMsg > 3000 && lastSeq) ui.meta.innerHTML = ui.meta.innerHTML.replace(/frame.*$/, '<span class="warn">stale: no frames for 3 s</span>');
+    renderer.render(scene, camera);
+    requestAnimationFrame(loop);
+  }
+  loop();
+})();
+</script>
+</body>
+</html>

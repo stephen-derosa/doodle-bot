@@ -1,0 +1,89 @@
+port: /dev/serial/by-id/usb-1a86_USB_Single_Serial_5B61034319-if00
+baud: 1000000
+joints:
+- name: shoulder_pan
+  id: 1
+  min_rad: -1.91986
+  max_rad: 1.91986
+  min_ticks: 100
+  max_ticks: 3995
+- name: shoulder_lift
+  id: 2
+  min_rad: -1.74533
+  max_rad: 1.74533
+  min_ticks: 100
+  max_ticks: 3995
+- name: elbow_flex
+  id: 3
+  min_rad: -1.69
+  max_rad: 1.69
+  min_ticks: 100
+  max_ticks: 3995
+- name: wrist_flex
+  id: 4
+  min_rad: -1.65806
+  max_rad: 1.65806
+  min_ticks: 100
+  max_ticks: 3995
+- name: wrist_roll
+  id: 5
+  min_rad: -2.74385
+  max_rad: 2.84121
+  min_ticks: 100
+  max_ticks: 3995
+geometry:
+  lift_r: 30.4
+  lift_z: 116.6
+  a1: 116.0
+  a2: 135.0
+  a3: 61.1
+  zero_angle1_deg: 94.482421875
+  zero_angle2_deg: 1.4062499999999951
+  zero_angle3_deg: -86.396484375
+tool:
+  along: 100.0
+  perp: 0.0
+  lateral: 0.0
+  roll_rad: 0.0
+motion:
+  rate_hz: 50.0
+  draw_speed: 30.0
+  travel_speed: 80.0
+  accel: 200.0
+  corner_speed: 8.0
+  pen_up_z: 8.0
+  pen_press: 1.5
+  plunge_speed: 15.0
+  dwell_s: 0.15
+  max_joint_speed_deg_s: 90.0
+  approach_speed_deg_s: 20.0
+  pen_tilt_options_deg:
+  - 0.0
+  - -5.0
+  - 5.0
+  - -10.0
+  - 10.0
+  - -15.0
+  - 15.0
+servo:
+  p_gain: 16
+  i_gain: 0
+  d_gain: 32
+  acceleration: 30
+  goal_velocity: 1500
+  torque_limit: 700
+  return_delay: 0
+paper:
+  width: 203.2
+  height: 266.7
+  canvas_width: 101.6
+  canvas_height: 152.4
+  margin: 5.0
+  canvas_u0: null
+  canvas_v0: 30.0
+park_pose_deg:
+- 0.0
+- -95.0
+- 95.0
+- 0.0
+- 0.0
