@@ -102,8 +102,8 @@ export default function PaintWindow({
   sizeLabel: string;
 }) {
   return (
-    <div className="win98 win98-raised flex h-full max-h-[calc(100vh-4rem)] w-full max-w-[900px] flex-col p-[3px]">
-      <div className="win98-titlebar">
+    <div className="win98 win98-raised flex h-full max-h-[calc(100vh-4rem)] w-full max-w-[1400px] flex-col p-[3px]">
+      <div className="win98-titlebar win98-scaled">
         <div className="flex items-center gap-1">
           <PaintIcon />
           <span>untitled - Paint</span>
@@ -121,7 +121,7 @@ export default function PaintWindow({
         </div>
       </div>
 
-      <div className="flex gap-[2px] px-[1px] py-[1px]">
+      <div className="win98-scaled flex gap-[2px] px-[1px] py-[1px]">
         {MENUS.map((m) => (
           <button key={m} className="win98-menuitem">
             <u>{m[0]}</u>
@@ -131,7 +131,7 @@ export default function PaintWindow({
       </div>
 
       <div className="flex min-h-0 flex-1 gap-[2px]">
-        <div className="flex w-[56px] shrink-0 flex-col items-center gap-2 pt-[2px]">
+        <div className="win98-scaled flex w-[56px] shrink-0 flex-col items-center gap-2 pt-[2px]">
           <div className="grid grid-cols-2">
             {TOOLS.map((t) => (
               <button
@@ -167,7 +167,7 @@ export default function PaintWindow({
         </div>
       </div>
 
-      <div className="flex items-center gap-1 py-[3px]">
+      <div className="win98-scaled flex items-center gap-1 py-[3px]">
         <div className="win98-sunken relative h-[31px] w-[31px] shrink-0 bg-[#c0c0c0]">
           <div className="win98-sunken absolute right-[4px] bottom-[4px] h-[14px] w-[14px] bg-white" />
           <div className="win98-sunken absolute top-[4px] left-[4px] h-[14px] w-[14px] bg-black" />
@@ -179,7 +179,7 @@ export default function PaintWindow({
         </div>
       </div>
 
-      <div className="flex gap-[2px]">
+      <div className="win98-scaled flex gap-[2px]">
         <div className="win98-status flex-1">For Help, click Help Topics on the Help Menu.</div>
         <div className="win98-status w-[110px]">
           <span ref={coordsRef} />

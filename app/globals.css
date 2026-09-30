@@ -32,8 +32,14 @@ body {
   color: #000;
   font-family: "Pixelated MS Sans Serif", "MS Sans Serif", "Microsoft Sans Serif", Tahoma, Geneva, sans-serif;
   font-size: 11px;
-  -webkit-font-smoothing: none;
   user-select: none;
+  --ui-scale: 1.75;
+}
+
+/* Enlarges the UI chrome (text, icons, bevels) for projector viewing.
+   Not applied to the canvas so its pixel-to-mm mapping stays fixed. */
+.win98-scaled {
+  zoom: var(--ui-scale);
 }
 
 .win98-raised {
