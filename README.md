@@ -95,3 +95,16 @@ The worker protocol is `POST /v1/stages/{stage-type}`. It receives JSON with
 the base64 input artifact, stage options, and model profile, and returns JSON
 with `data_base64`, `media_type`, optional `filename`, and `metadata`.
 Credentials stay in environment variables, never model or pipeline files.
+
+## Whiteboard
+
+The repo also includes a Next.js drawing whiteboard in `app/`. Install
+dependencies and start the dev server from the repository root:
+
+```bash
+npm install
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000). The page is `app/page.tsx`;
+the drawing surface lives in `app/whiteboard.tsx`.
