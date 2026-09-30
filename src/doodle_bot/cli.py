@@ -34,7 +34,7 @@ def main() -> None:
         help="Convert movement G-code to an SO-101 drawing JSON file.",
     )
     add_gcode_to_so101_arguments(gcode_to_so101)
-    render = subparsers.add_parser("render", help="Render existing movement G-code interactively.")
+    render = subparsers.add_parser("render", help="Render an SO-101 drawing JSON interactively.")
     add_render_arguments(render)
     draw = subparsers.add_parser(
         "draw",

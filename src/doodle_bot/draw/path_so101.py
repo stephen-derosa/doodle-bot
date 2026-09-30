@@ -13,7 +13,7 @@ import math
 from pathlib import Path
 from typing import Iterable
 
-from .motion import Move
+from .motion import Move, paths_to_moves
 from .path_gcode import read_moves_gcode
 
 
@@ -49,6 +49,53 @@ def moves_to_strokes(moves: Iterable[Move]) -> list[list[list[float]]]:
     if stroke is not None:
         strokes.append(stroke)
     return strokes
+
+
+def read_so101_strokes(path: Path) -> list[list[tuple[float, float]]]:
+    """Read and validate the SO-101 JSON drawing format."""
+
+    try:
+        drawing = json.loads(path.read_text(encoding="utf-8"))
+    except OSError as error:
+        raise ValueError(f"unable to read SO-101 JSON: {error}") from error
+    except json.JSONDecodeError as error:
+        raise ValueError(f"invalid SO-101 JSON: {error}") from error
+    if not isinstance(drawing, dict):
+        raise ValueError("SO-101 JSON root must be an object")
+    if drawing.get("units") != "mm":
+        raise ValueError("SO-101 JSON units must be 'mm'")
+    raw_strokes = drawing.get("strokes")
+    if not isinstance(raw_strokes, list) or not raw_strokes:
+        raise ValueError("SO-101 JSON requires a non-empty strokes array")
+
+    strokes: list[list[tuple[float, float]]] = []
+    for stroke_index, raw_stroke in enumerate(raw_strokes):
+        if not isinstance(raw_stroke, list) or not raw_stroke:
+            raise ValueError(f"stroke {stroke_index} must be a non-empty array")
+        stroke: list[tuple[float, float]] = []
+        for point_index, raw_point in enumerate(raw_stroke):
+            if (
+                not isinstance(raw_point, list)
+                or len(raw_point) != 2
+                or any(isinstance(value, bool) or not isinstance(value, (int, float)) for value in raw_point)
+            ):
+                raise ValueError(
+                    f"stroke {stroke_index} point {point_index} must contain two numbers"
+                )
+            point = float(raw_point[0]), float(raw_point[1])
+            if not all(math.isfinite(value) for value in point):
+                raise ValueError(
+                    f"stroke {stroke_index} point {point_index} must be finite"
+                )
+            stroke.append(point)
+        strokes.append(stroke)
+    return strokes
+
+
+def read_moves_so101(path: Path, *, max_step: float = 1.0) -> list[Move]:
+    """Convert an SO-101 JSON drawing into visualization movements."""
+
+    return paths_to_moves(read_so101_strokes(path), max_step=max_step)
 
 
 def gcode_to_so101(

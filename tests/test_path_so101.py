@@ -4,7 +4,12 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from doodle_bot.draw.motion import Move
-from doodle_bot.draw.path_so101 import gcode_to_so101, moves_to_strokes
+from doodle_bot.draw.path_so101 import (
+    gcode_to_so101,
+    moves_to_strokes,
+    read_moves_so101,
+    read_so101_strokes,
+)
 
 
 class PathSo101Tests(unittest.TestCase):
@@ -51,6 +56,12 @@ class PathSo101Tests(unittest.TestCase):
                 },
             )
             self.assertEqual(json.loads(output_path.read_text()), drawing)
+            self.assertEqual(
+                read_so101_strokes(output_path),
+                [[(1.0, 2.0), (3.1235, 4.5)]],
+            )
+            moves = read_moves_so101(output_path, max_step=10.0)
+            self.assertEqual(moves[-1], Move(3.1235, 4.5, True))
 
     def test_rejects_gcode_without_pen_down_moves(self) -> None:
         with TemporaryDirectory() as temporary_directory:
@@ -60,6 +71,14 @@ class PathSo101Tests(unittest.TestCase):
 
             with self.assertRaisesRegex(ValueError, "no pen-down"):
                 gcode_to_so101(input_path, root / "travel.json")
+
+    def test_rejects_invalid_so101_points(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "invalid.json"
+            path.write_text('{"units":"mm","strokes":[[[1]]]}\n')
+
+            with self.assertRaisesRegex(ValueError, "must contain two numbers"):
+                read_so101_strokes(path)
 
 
 if __name__ == "__main__":

@@ -8,8 +8,7 @@ from pathlib import Path
 import shutil
 from time import perf_counter
 
-from .path_gcode import read_moves_gcode
-from .path_so101 import gcode_to_so101
+from .path_so101 import gcode_to_so101, read_moves_so101
 from .path_svg import read_svg_canvas_size, svg_to_gcode
 from .renderer import interactive_plot
 from .tracer import DEFAULT_IMAGE, trace_image_to_svg
@@ -87,13 +86,9 @@ def run_draw_command(args: argparse.Namespace) -> None:
             pen_up_z=args.pen_up_z,
             pen_down_z=args.pen_down_z,
         )
-        # Intentionally read the generated file back: the GUI consumes the
-        # same G-code contract a robot or standalone renderer receives.
-        moves = read_moves_gcode(
-            gcode_path,
-            pen_up_z=args.pen_up_z,
-            pen_down_z=args.pen_down_z,
-        )
+        # Read the final artifact back so the preview consumes the exact
+        # SO-101 drawing contract handed to the robot application.
+        moves = read_moves_so101(so101_path, max_step=args.max_step)
     except ValueError as error:
         raise SystemExit(str(error)) from error
     print(

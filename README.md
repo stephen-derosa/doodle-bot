@@ -71,16 +71,17 @@ and arcs. It applies nested SVG transforms, adaptively flattens curves, then
 orients and reorders strokes with nearest-endpoint routing plus 2-opt to reduce
 pen-up travel. G-code movement spacing remains bounded by `--max-step`.
 
-Render existing G-code with the interactive GUI:
+Render an existing SO-101 JSON drawing with the interactive GUI:
 
 ```bash
-uv run doodle-bot render --input char.gcode
+uv run doodle-bot render --input robot/assets/char.json
 ```
 
 For the usual one-shot workflow, `draw` runs all three conversions, retains
-their output, reads the G-code back through the same parser, and starts the
-GUI. Each invocation creates an `<image>-<timestamp>` folder beside the input
-(or below `--output-root`) containing same-stem SVG, G-code, and SO-101 JSON:
+their output, reads the final SO-101 JSON back through the plotting adapter,
+and starts the GUI. Each invocation creates an `<image>-<timestamp>` folder
+beside the input (or below `--output-root`) containing same-stem SVG, G-code,
+and SO-101 JSON:
 
 ```bash
 uv run doodle-bot draw --input images/char.png
