@@ -25,7 +25,7 @@ from __future__ import annotations
 import copy
 import itertools
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 import numpy as np
 
@@ -35,11 +35,20 @@ from .config import Calibration, Config, PaperFrame, Tool
 from .kinematics import PEN_DOWN_ANGLE, SO101Kinematics
 
 
+def _roll_axis_at_l_pose(pen_angle_deg: float) -> float:
+    """Roll axis angle when the pen points straight down.
+
+    The L pose fixes the *pen*, not the roll axis. A pen that hangs square off
+    the roll horn (pen_angle_deg = -90) is vertical while the roll axis is level.
+    """
+    return PEN_DOWN_ANGLE - math.radians(pen_angle_deg)
+
+
 def reference_pose_q(cfg: Config) -> np.ndarray:
     """URDF joint angles of the L pose (pan centred, upper arm vertical,
     forearm horizontal, pen straight down, roll at its drawing value)."""
     A = np.radians([cfg.geometry.zero_angle1_deg, cfg.geometry.zero_angle2_deg, cfg.geometry.zero_angle3_deg])
-    phi1, phi2, phi3 = math.pi / 2, 0.0, PEN_DOWN_ANGLE
+    phi1, phi2, phi3 = math.pi / 2, 0.0, _roll_axis_at_l_pose(cfg.tool.pen_angle_deg)
     q1 = A[0] - phi1
     q2 = (A[1] - A[0]) - (phi2 - phi1)
     q3 = (A[2] - A[1]) - (phi3 - phi2)
@@ -178,7 +187,7 @@ def grid_diagram(uv, all_uv, width: float, height: float, canvas,
     ])
 
 
-def geometry_from_pose(q_chain) -> np.ndarray:
+def geometry_from_pose(q_chain, pen_angle_deg: float = 0.0) -> np.ndarray:
     """Inverse of `reference_pose_q`: link angles at q=0 implied by the L pose.
 
     A (the `zero_angle*` geometry) and the zero ticks are two parameterisations
@@ -190,11 +199,12 @@ def geometry_from_pose(q_chain) -> np.ndarray:
 
     Args:
         q_chain: measured [shoulder_lift, elbow_flex, wrist_flex] at the L pose.
+        pen_angle_deg: the tool's pen angle from the roll axis (`Tool.pen_angle_deg`).
 
     Returns:
         [A0, A1, A2] in radians.
     """
-    phi1, phi2, phi3 = math.pi / 2, 0.0, PEN_DOWN_ANGLE
+    phi1, phi2, phi3 = math.pi / 2, 0.0, _roll_axis_at_l_pose(pen_angle_deg)
     q1, q2, q3 = (float(v) for v in q_chain)
     a0 = q1 + phi1
     a1 = q2 + a0 + phi2 - phi1
@@ -300,7 +310,7 @@ def diagnose_signs(cfg: Config, cal: Calibration, tool_candidates=None) -> list[
         d[1:4] = flips
         # the geometry the L pose implies under these signs
         c = copy.deepcopy(cfg)
-        A = geometry_from_pose(d[1:4] * (pose[1:4] - zero[1:4]) * RAD_PER_TICK)
+        A = geometry_from_pose(d[1:4] * (pose[1:4] - zero[1:4]) * RAD_PER_TICK, cfg.tool.pen_angle_deg)
         c.geometry.zero_angle1_deg, c.geometry.zero_angle2_deg, c.geometry.zero_angle3_deg = (
             math.degrees(v) for v in A)
         for tool in tools:
@@ -417,8 +427,7 @@ def refine_from_grid(cfg: Config, cal: Calibration, touches: list[TouchPoint],
         return dz, tool_along, ox, oy, oz, yaw
 
     def make_kin(tool_along):
-        t = Tool(along=tool_along, perp=cfg.tool.perp, lateral=cfg.tool.lateral, roll_rad=cfg.tool.roll_rad)
-        return SO101Kinematics.from_config(cfg, t)
+        return SO101Kinematics.from_config(cfg, replace(cfg.tool, along=tool_along))
 
     def world_targets(ox, oy, oz, yaw):
         c, s = math.cos(yaw), math.sin(yaw)

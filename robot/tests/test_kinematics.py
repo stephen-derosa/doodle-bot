@@ -75,3 +75,32 @@ def test_radial_reach_sane():
     assert 40 < rmin < 160
     assert 220 < rmax < 300
     assert rmax - rmin > 100
+
+
+def _side_mount_config():
+    """Pen hung square off the roll horn: level roll axis, pen 76 mm below it."""
+    cfg = Config()
+    cfg.tool.along, cfg.tool.perp, cfg.tool.pen_angle_deg = 30.0, -76.0, -90.0
+    return cfg
+
+
+def test_ik_roundtrip_side_mounted_pen():
+    k = SO101Kinematics.from_config(_side_mount_config())
+    k.limits = [(-math.pi, math.pi)] * 5    # the nominal limits assume a gripper-style mount
+    for x, y in [(150, 0), (180, 40), (200, -60), (230, 0)]:
+        res = k.ik((x, y, 0.0))
+        assert res.ok, res.reason
+        assert np.allclose(k.fk(res.q), (x, y, 0.0), atol=1e-6)
+        # the pen, not the roll axis, is what points at the table
+        assert np.allclose(k.pen_direction(res.q), (0, 0, -1), atol=1e-9)
+        assert abs(k.link_angles(res.q)[2]) < 1e-9
+
+
+def test_side_mounted_pen_tip_sits_below_and_ahead_of_the_roll_joint():
+    k = SO101Kinematics.from_config(_side_mount_config())
+    k.limits = [(-math.pi, math.pi)] * 5
+    res = k.ik((180, 0, 0.0))
+    assert res.ok, res.reason
+    q = res.q
+    *_, roll, tip = k.planar_points(q)
+    assert np.allclose(tip - roll, (30.0, -76.0), atol=1e-6)

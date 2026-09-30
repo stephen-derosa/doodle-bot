@@ -23,7 +23,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from .config import Config, Geometry, Tool
+from .arm import joint_limits_rad
+from .config import Calibration, Config, Geometry, Tool
 
 PEN_DOWN_ANGLE = -math.pi / 2  # phi3 for a pen pointing straight at the table
 
@@ -44,8 +45,15 @@ class SO101Kinematics:
         self.A = np.radians([geom.zero_angle1_deg, geom.zero_angle2_deg, geom.zero_angle3_deg])
 
     @classmethod
-    def from_config(cls, cfg: Config, tool: Tool | None = None) -> "SO101Kinematics":
-        return cls(cfg.geometry, tool or cfg.tool, [(j.min_rad, j.max_rad) for j in cfg.joints])
+    def from_config(cls, cfg: Config, tool: Tool | None = None,
+                    cal: Calibration | None = None) -> "SO101Kinematics":
+        """Pass `cal` to plan against the measured travel the arm enforces;
+        without it the config's radian limits are used as they stand."""
+        if cal is None:
+            limits = [(j.min_rad, j.max_rad) for j in cfg.joints]
+        else:
+            limits = list(zip(*joint_limits_rad(cfg, cal)))
+        return cls(cfg.geometry, tool or cfg.tool, limits)
 
     # -- forward ------------------------------------------------------------
     def link_angles(self, q) -> tuple[float, float, float]:
@@ -83,8 +91,13 @@ class SO101Kinematics:
         c, s = math.cos(q[0]), math.sin(q[0])
         return np.array([r * c - lat * s, r * s + lat * c, z])
 
+    @property
+    def pen_offset(self) -> float:
+        """Pen body angle minus roll axis angle, in the arm plane (rad)."""
+        return math.radians(self.tool.pen_angle_deg)
+
     def pen_direction(self, q) -> np.ndarray:
-        phi3 = self.link_angles(q)[2]
+        phi3 = self.link_angles(q)[2] + self.pen_offset
         c, s = math.cos(q[0]), math.sin(q[0])
         return np.array([math.cos(phi3) * c, math.cos(phi3) * s, math.sin(phi3)])
 
@@ -135,7 +148,8 @@ class SO101Kinematics:
         pan = math.atan2(y, x) - math.atan2(lat, r)
         reasons = []
         for tilt in tilt_options_deg:
-            phi3 = PEN_DOWN_ANGLE + math.radians(tilt)
+            # tilt is of the pen; ik_planar wants the roll axis angle
+            phi3 = PEN_DOWN_ANGLE + math.radians(tilt) - self.pen_offset
             q123, why = self.ik_planar(r, z, phi3)
             if q123 is None:
                 reasons.append(f"tilt {tilt:+.0f}: {why}")

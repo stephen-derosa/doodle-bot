@@ -80,7 +80,7 @@ def render_toolpath(segments, width: float, height: float, path: Path | str, px_
 def render_layout(cfg: Config, cal: Calibration, path: Path | str, px_per_mm: float = 2.0,
                   canvas_uv0=(0.0, 0.0), z: float | None = None, tilt_options=None) -> Path:
     """Top-down view in the world frame: reachable pen positions, paper, canvas."""
-    kin = SO101Kinematics.from_config(cfg)
+    kin = SO101Kinematics.from_config(cfg, cal=cal)
     if cal.tool_along is not None:
         kin.tool.along = cal.tool_along
     z = cal.paper.origin[2] if z is None else z

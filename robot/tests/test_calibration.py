@@ -400,3 +400,17 @@ def test_levenberg_marquardt_stops_once_the_gain_is_negligible():
     # stopping on negligible gain trades the last digits for not grinding
     assert np.allclose(x, [1.0, 2.0], atol=1e-3)
     assert len(calls) < 60 * 5          # converged early rather than burning every iteration
+
+
+def test_l_pose_levels_the_roll_axis_for_a_side_mounted_pen():
+    """The L pose fixes the pen straight down; for a side mount that is a level roll axis."""
+    cfg = Config()
+    cfg.tool.pen_angle_deg = -90.0
+    k = SO101Kinematics.from_config(cfg)
+    q = calib.reference_pose_q(cfg)
+    phi1, phi2, phi3 = k.link_angles(q)
+    assert math.isclose(phi3, 0.0, abs_tol=1e-9)
+    assert np.allclose(k.pen_direction(q), (0, 0, -1), atol=1e-9)
+    A = np.degrees(calib.geometry_from_pose(q[1:4], cfg.tool.pen_angle_deg))
+    assert np.allclose(A, [cfg.geometry.zero_angle1_deg, cfg.geometry.zero_angle2_deg,
+                           cfg.geometry.zero_angle3_deg], atol=1e-9)

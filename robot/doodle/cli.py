@@ -10,7 +10,7 @@ from pathlib import Path
 import numpy as np
 
 from . import calibration as calib
-from .arm import RAD_PER_TICK, Arm, SafetyError, open_arm
+from .arm import RAD_PER_TICK, Arm, SafetyError, joint_limits_rad, open_arm
 from .config import (Calibration, Config, ROOT, load_calibration, load_config, save_calibration,
                      save_config)
 from .kinematics import SO101Kinematics
@@ -40,7 +40,7 @@ def load_drawing(spec: str) -> Drawing:
 
 
 def kin_for(cfg: Config, cal: Calibration) -> SO101Kinematics:
-    k = SO101Kinematics.from_config(cfg)
+    k = SO101Kinematics.from_config(cfg, cal=cal)
     if cal.tool_along is not None:
         k.tool.along = cal.tool_along
     return k
@@ -181,7 +181,7 @@ def cmd_calib_pose(a, cfg, cal):
         q_chain = d[1:4] * (np.asarray(ticks, float)[1:4] - centre) * RAD_PER_TICK
         q_ref_old = calib.reference_pose_q(cfg)
         old_A = [cfg.geometry.zero_angle1_deg, cfg.geometry.zero_angle2_deg, cfg.geometry.zero_angle3_deg]
-        new_A = [float(math.degrees(v)) for v in calib.geometry_from_pose(q_chain)]
+        new_A = [float(math.degrees(v)) for v in calib.geometry_from_pose(q_chain, cfg.tool.pen_angle_deg)]
         (cfg.geometry.zero_angle1_deg,
          cfg.geometry.zero_angle2_deg,
          cfg.geometry.zero_angle3_deg) = new_A
@@ -208,19 +208,24 @@ def cmd_calib_pose(a, cfg, cal):
         for i, (o, n) in enumerate(zip(old_A, new_A), start=1):
             print(f"  zero_angle{i}_deg  {o:8.2f} -> {n:8.2f}")
 
-        if np.abs(np.degrees(shift)).max() > 0.05:
+        # Only radian limits move with q. A measured tick window is the same
+        # physical travel whatever the zeros are, so listing it as "shifted"
+        # would only suggest a change that did not happen.
+        moved = [(j, lim, d) for j, lim, d in zip(cfg.joints, old_lim, np.degrees(shift))
+                 if abs(d) > 0.05 and not j.travel_measured]
+        if moved:
             print("\njoint limits shifted with the new q (deg):")
-            for j, (lo, hi), d in zip(cfg.joints, old_lim, np.degrees(shift)):
-                if abs(d) > 0.05:
-                    print(f"  {j.name:14s} [{lo:7.1f},{hi:7.1f}] -> "
-                          f"[{math.degrees(j.min_rad):7.1f},{math.degrees(j.max_rad):7.1f}]  ({d:+.2f})")
+            for j, (lo, hi), d in moved:
+                print(f"  {j.name:14s} [{lo:7.1f},{hi:7.1f}] -> "
+                      f"[{math.degrees(j.min_rad):7.1f},{math.degrees(j.max_rad):7.1f}]  ({d:+.2f})")
 
+        lo_all, hi_all = (np.degrees(v) for v in joint_limits_rad(cfg, cal))
         print("\nL pose now sits at:")
-        q_ref = calib.reference_pose_q(cfg)
-        for j, q in zip(cfg.joints, q_ref):
-            lo, hi = math.degrees(j.min_rad), math.degrees(j.max_rad)
-            print(f"  {j.name:14s} {math.degrees(q):7.2f} deg in [{lo:.0f}, {hi:.0f}]"
-                  f"  (headroom {min(math.degrees(q) - lo, hi - math.degrees(q)):.1f})")
+        q_ref = np.degrees(calib.reference_pose_q(cfg))
+        for j, q, lo, hi in zip(cfg.joints, q_ref, lo_all, hi_all):
+            src = "measured" if j.travel_measured else "URDF default"
+            print(f"  {j.name:14s} {q:7.2f} deg in [{lo:.0f}, {hi:.0f}]"
+                  f"  (headroom {min(q - lo, hi - q):.1f}, {src})")
 
         pc = save_config(cfg, a.config)
         p = save_calibration(cal, a.calib)
@@ -234,19 +239,20 @@ def cmd_calib_pose(a, cfg, cal):
                   f"\n  per-joint shift : {np.round(shift_deg, 2).tolist()}"
                   f"\n  same pose as before: {np.round(park_equiv, 2).tolist()}"
                   f"\n  currently in config: {cfg.park_pose_deg}")
-            lo = np.degrees([j.min_rad for j in cfg.joints])
-            hi = np.degrees([j.max_rad for j in cfg.joints])
-            park = np.asarray(cfg.park_pose_deg, float)
-            if np.any(park < lo) or np.any(park > hi):
-                print("  WARNING: the configured park pose is now outside the joint limits; "
-                      "update it before running `doodle draw`.")
+        park = np.asarray(cfg.park_pose_deg, float)
+        outside = [f"{j.name} {v:.1f} not in [{lo:.1f}, {hi:.1f}]"
+                   for j, v, lo, hi in zip(cfg.joints, park, lo_all, hi_all) if not lo <= v <= hi]
+        if outside:
+            print("\nWARNING: park_pose_deg in the config is outside the joint travel ("
+                  + "; ".join(outside) + "). The L pose is not affected. "
+                  "Update park_pose_deg before running `doodle draw`.")
         print("Next: `doodle calib check-dirs`, then `doodle calib paper`.")
     finally:
         arm.bus.close()
     return 0
 
 
-def _feasible_nudge(arm, q0, k, step_deg=8.0, min_deg=2.0):
+def _feasible_nudge(arm, q0, k, step_deg=15.0, min_deg=2.0):
     """Largest safe nudge of joint `k` away from q0, positive for preference.
 
     A joint can sit close enough to an end stop that the nominal step does not
@@ -393,15 +399,24 @@ def cmd_calib_check_dirs(a, cfg, cal):
             # Nudging the other way inverts the motion the model predicts.
             described = expect[n] if deg > 0 else f"the OPPOSITE of: {expect[n]}"
             print(f"\n{n}: zeroing, then moving {deg:+.0f} deg. Expected: {described}")
-            while True:
-                arm.move_to_q(home, speed_deg_s=15)
-                time.sleep(0.4)
-                arm.move_to_q(q1, speed_deg_s=15)
-                ans = "y" if a.dry_run else input("  Did it move as expected? [Y/n/r=repeat] ").strip().lower()
-                if not ans.startswith("r"):
-                    break
-                print("  repeating...")
-            if ans.startswith("n"):
+            arm.move_to_q(home, speed_deg_s=15)
+            time.sleep(0.4)
+            arm.move_to_q(q1, speed_deg_s=15)
+            # Hold the nudge until the answer is an explicit yes or no, so the
+            # joint can be inspected for as long as it takes. Enter is not an
+            # answer, and a repeat backs off only halfway before replaying the
+            # motion, so the joint never returns to zero before the verdict.
+            ans = "y" if a.dry_run else ""
+            while ans not in ("y", "n"):
+                ans = input("  Did it move as expected? [y/n/r=repeat] ").strip().lower()[:1]
+                if ans == "r":
+                    print("  repeating...")
+                    arm.move_to_q(home + (q1 - home) / 2, speed_deg_s=15)
+                    time.sleep(0.4)
+                    arm.move_to_q(q1, speed_deg_s=15)
+                elif ans not in ("y", "n"):
+                    print("  answer y or n (r repeats the motion)")
+            if ans == "n":
                 cal.direction[k] = -cal.direction[k]
                 arm.dir[k] = cal.direction[k]
                 changed = True

@@ -22,6 +22,24 @@ class SafetyError(RuntimeError):
     pass
 
 
+def joint_limits_rad(cfg: Config, cal: Calibration) -> tuple[np.ndarray, np.ndarray]:
+    """Joint limits in q (radians) under this calibration.
+
+    Measured travel wins. Limits stored in radians are relative to q, and q is
+    defined by the zero ticks, so any recalibration silently moves them; the
+    tick window is the same physical travel whatever q means.
+    """
+    lo = np.array([j.min_rad for j in cfg.joints])
+    hi = np.array([j.max_rad for j in cfg.joints])
+    for i, (j, z, d) in enumerate(zip(cfg.joints, cal.zero_ticks, cal.direction)):
+        if not j.travel_measured:
+            continue
+        a = d * (j.min_ticks - z) * RAD_PER_TICK
+        b = d * (j.max_ticks - z) * RAD_PER_TICK
+        lo[i], hi[i] = min(a, b), max(a, b)
+    return lo, hi
+
+
 class Arm:
     def __init__(self, bus: FeetechBus, cfg: Config, cal: Calibration):
         self.bus, self.cfg, self.cal = bus, cfg, cal
@@ -31,17 +49,7 @@ class Arm:
         self.dir = np.asarray(cal.direction, float)
         self.min_ticks = np.array([j.min_ticks for j in cfg.joints])
         self.max_ticks = np.array([j.max_ticks for j in cfg.joints])
-        self.min_rad = np.array([j.min_rad for j in cfg.joints])
-        self.max_rad = np.array([j.max_rad for j in cfg.joints])
-        # Measured travel wins. Limits stored in radians are relative to q, and
-        # q is defined by the zero ticks, so any recalibration silently moves
-        # them; the tick window is the same physical travel whatever q means.
-        for i, j in enumerate(cfg.joints):
-            if not j.travel_measured:
-                continue
-            a = self.dir[i] * (j.min_ticks - self.zero[i]) * RAD_PER_TICK
-            b = self.dir[i] * (j.max_ticks - self.zero[i]) * RAD_PER_TICK
-            self.min_rad[i], self.max_rad[i] = min(a, b), max(a, b)
+        self.min_rad, self.max_rad = joint_limits_rad(cfg, cal)
         self._last_cmd_ticks: np.ndarray | None = None
         # Whoever owns the bus broadcasts what it reads, so a viewer never has to.
         self.tap = Tap()

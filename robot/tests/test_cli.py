@@ -56,11 +56,32 @@ def test_check_dirs_r_repeats_the_motion(monkeypatch, tmp_path):
     cal, moves, asked = _run_check_dirs(monkeypatch, tmp_path, ["r", "r", "y", "y", "y", "y", "y"])
 
     assert asked == ["r", "r", "y", "y", "y", "y", "y"]
-    # each pass zeroes then nudges, so 5 joints + 2 replays = 7 passes, plus a
-    # final re-zero when the loop ends
-    assert len(moves) == 2 * (5 + 2) + 1
+    # each joint zeroes then nudges, each replay backs off then nudges again,
+    # plus a final re-zero when the loop ends
+    assert len(moves) == 2 * 5 + 2 * 2 + 1
     # repeating must not be mistaken for "no" -- no direction should flip
     assert cal.direction == [1, 1, 1, 1, 1]
+
+
+def test_check_dirs_holds_the_nudge_until_yes_or_no(monkeypatch, tmp_path):
+    """The joint under test must not return to zero before an explicit y/n.
+
+    Enter and stray keys re-ask without moving, and a replay backs off only
+    halfway, so between the nudge and the verdict no move targets q=0.
+    """
+    cal, moves, asked = _run_check_dirs(monkeypatch, tmp_path, ["", "x", "r", "n", "y", "y", "y", "y"])
+
+    assert asked == ["", "x", "r", "n", "y", "y", "y", "y"]
+    # zero, nudge, then the replay: halfway back, nudge again
+    home, q1, back, again = moves[:4]
+    assert np.allclose(home, 0.0)
+    assert q1[0] > 0 and np.allclose(q1[1:], 0.0)
+    assert np.allclose(back, q1 / 2)
+    assert np.allclose(again, q1)
+    # the next zeroing comes only after the "n"
+    assert np.allclose(moves[4], 0.0)
+    assert len(moves) == 2 * 5 + 2 + 1
+    assert cal.direction == [-1, 1, 1, 1, 1]
 
 
 def test_check_dirs_n_after_r_still_flips(monkeypatch, tmp_path):
@@ -370,3 +391,39 @@ def test_calib_travel_opens_the_bus_once_and_saves_before_displaying(monkeypatch
     assert all(j.travel_measured for j in saved.joints)
     # dry-run synthesises +-900 ticks around the fake arm's pose, trimmed by the margin
     assert all(j.max_ticks - j.min_ticks == 1800 - 2 * 15 for j in saved.joints)
+
+
+def test_calib_pose_reports_measured_travel_and_names_the_bad_park_joint(monkeypatch, tmp_path, capsys):
+    """The printed limits must be the measured travel, not stale radian fields.
+
+    Regression: with travel measured, `calib pose` printed wrist_flex as
+    [-181, 9] deg (the URDF radian fields, shifted) while the arm itself
+    enforced the measured [-101, 84], and warned about the park pose without
+    saying which joint was out.
+    """
+    cfg, cal = Config(), Calibration(zero_ticks=[2048.0] * 5, direction=[1] * 5, joints_calibrated=True)
+    for j in cfg.joints:
+        j.min_ticks, j.max_ticks, j.travel_measured = 1040, 3000, True   # about [-88.6, 83.7] deg
+        j.min_rad, j.max_rad = -3.16, 0.16                               # stale, deliberately wrong
+    arm = open_arm(cfg, cal, dry_run=True)
+    for i in cfg.ids:
+        arm.bus.mem[i]["present_position"] = 2048
+    monkeypatch.setattr(cli, "open_arm", lambda *a, **k: arm)
+    monkeypatch.setattr(builtins, "input", lambda *_: "")
+    cli.cmd_calib_pose(argparse.Namespace(dry_run=False, calib=tmp_path / "c.yaml",
+                                          config=tmp_path / "d.yaml"), cfg, cal)
+    out = capsys.readouterr().out
+    assert "in [-89, 84]" in out and "in [-181" not in out
+    # the default park pose folds shoulder_lift to -95 deg, past the -88.6 stop
+    assert "shoulder_lift -95.0 not in [-88.6, 83.7]" in out
+    assert "joint limits shifted" not in out            # measured windows never shift
+
+
+def test_ik_plans_against_the_measured_travel():
+    cfg, cal = Config(), Calibration(zero_ticks=[2048.0] * 5, direction=[1] * 5, joints_calibrated=True)
+    for j in cfg.joints:
+        j.min_ticks, j.max_ticks, j.travel_measured = 1040, 3000, True
+        j.min_rad, j.max_rad = -0.01, 0.01                              # stale radian fields
+    lo, hi = cli.joint_limits_rad(cfg, cal)
+    assert np.allclose(cli.kin_for(cfg, cal).limits, list(zip(lo, hi)))
+    assert np.allclose(open_arm(cfg, cal, dry_run=True).min_rad, lo)

@@ -49,7 +49,7 @@ class Executor:
                  abort_ticks: float = 250.0, warn_ticks: float = 60.0, max_temp_c: float = 65.0,
                  read_every: int = 1):
         self.arm, self.cfg, self.cal = arm, cfg, cal
-        self.kin = kin or SO101Kinematics.from_config(cfg)
+        self.kin = kin or SO101Kinematics.from_config(cfg, cal=cal)
         if cal.tool_along is not None:
             self.kin.tool.along = cal.tool_along
         self.realtime, self.verbose = realtime, verbose

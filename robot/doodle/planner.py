@@ -177,7 +177,7 @@ def build_segments(drawing: Drawing, cfg: Config) -> list[Segment]:
 
 def plan(drawing: Drawing, cfg: Config, cal: Calibration, kin: SO101Kinematics | None = None) -> Trajectory:
     m = cfg.motion
-    kin = kin or SO101Kinematics.from_config(cfg)
+    kin = kin or SO101Kinematics.from_config(cfg, cal=cal)
     if cal.tool_along is not None:
         kin.tool.along = cal.tool_along
     segs = build_segments(drawing, cfg)

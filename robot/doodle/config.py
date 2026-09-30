@@ -61,9 +61,15 @@ class Geometry:
 class Tool:
     """Pen tip relative to the wrist_roll output frame."""
     along: float = 100.0    # mm along the roll axis (out of the holder) to the pen tip
-    perp: float = 0.0       # mm off-axis, in the arm plane when roll = roll_rad
+    perp: float = 0.0       # mm off-axis, in the arm plane when roll = roll_rad (+ = 90 deg CCW of the roll axis)
     lateral: float = 0.0    # mm off-axis, perpendicular to the arm plane
     roll_rad: float = 0.0   # wrist_roll joint angle held while drawing
+    # Angle of the pen body from the roll axis, in the arm plane. 0 = the pen
+    # continues the roll axis (a gripper-style mount). -90 = the pen hangs
+    # square below a roll axis that points forward, as on a bracket clamped to
+    # the side of the roll horn: then the pen is vertical with the roll axis
+    # level, and its tip is `perp` = -(tip drop below the axis) mm off it.
+    pen_angle_deg: float = 0.0
 
 
 @dataclass
