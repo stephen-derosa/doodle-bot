@@ -21,6 +21,8 @@ from livekit.agents.utils.images import EncodeOptions, ResizeOptions, encode
 from livekit.plugins import ai_coustics
 from openai import AsyncOpenAI
 
+from svg_trace import raster_to_svg
+
 load_dotenv(".env.local")
 
 IMAGE_MODEL = os.getenv("OPENAI_IMAGE_MODEL", "gpt-image-2.5-flare")
@@ -128,10 +130,11 @@ class DoodleBot(Agent):
         prompt = SKETCH_PROMPT.format(ask=description.strip())
         async with ctx.with_filler("Still sketching, almost there.", delay=6, interval=10):
             image_bytes = await self._generate_sketch(prompt, frame)
+            svg = await asyncio.to_thread(raster_to_svg, image_bytes)
 
-        fd, path = tempfile.mkstemp(prefix=f"doodle-{int(time.time())}-", suffix=".jpg", dir=OUTPUT_DIR)
-        with os.fdopen(fd, "wb") as f:
-            f.write(image_bytes)
+        fd, path = tempfile.mkstemp(prefix=f"doodle-{int(time.time())}-", suffix=".svg", dir=OUTPUT_DIR)
+        with os.fdopen(fd, "w") as f:
+            f.write(svg)
         print(path, flush=True)
 
         return "The sketch is ready and has been sent to the robot arm."
