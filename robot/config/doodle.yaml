@@ -53,16 +53,16 @@ tool:
   pen_angle_deg: -90.0
 motion:
   rate_hz: 50.0
-  draw_speed: 100.0
+  draw_speed: 50.0
   travel_speed: 200.0
   accel: 200.0
   corner_speed: 8.0
   pen_up_z: 8.0
-  pen_press: 4.0
-  plunge_speed: 15.0
-  dwell_s: 0.15
-  max_joint_speed_deg_s: 90.0
-  approach_speed_deg_s: 50.0
+  pen_press: 6.0
+  plunge_speed: 30.0
+  dwell_s: 0.0
+  max_joint_speed_deg_s: 75.0
+  approach_speed_deg_s: 20.0
   pen_tilt_options_deg:
   - 0.0
   - -5.0
@@ -73,7 +73,7 @@ motion:
   - 15.0
 servo:
   p_gain: 16
-  i_gain: 0
+  i_gain: 0.03
   d_gain: 32
   acceleration: 30
   goal_velocity: 1500
