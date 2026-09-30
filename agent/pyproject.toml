@@ -1,0 +1,16 @@
+[project]
+name = "doodle-bot-agent"
+version = "0.1.0"
+description = "LiveKit voice agent that turns a spoken request (and optional camera frame) into a robot-drawable sketch"
+requires-python = ">=3.10, <3.15"
+
+dependencies = [
+    "livekit-agents[images]~=1.8",
+    "livekit-plugins-ai-coustics~=0.3",
+    "openai>=2",
+    "python-dotenv",
+]
+
+[tool.uv]
+# Mirrors agent-starter-python: yarl 1.24.1 shipped only a cp310 wheel.
+constraint-dependencies = ["yarl<1.24"]
