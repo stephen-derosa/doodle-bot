@@ -1,0 +1,2 @@
+[console_scripts]
+doodle = doodle.cli:main
