@@ -3,47 +3,105 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime
 from pathlib import Path
-from tempfile import TemporaryDirectory
+import shutil
 from time import perf_counter
 
-from .path_csv import read_moves_csv
+from .path_gcode import read_moves_gcode
+from .path_so101 import gcode_to_so101
+from .path_svg import read_svg_canvas_size, svg_to_gcode
 from .renderer import interactive_plot
-from .tracer import DEFAULT_IMAGE, trace_image_to_csv
+from .tracer import DEFAULT_IMAGE, trace_image_to_svg
 
 
 def add_draw_arguments(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--input", type=Path, default=DEFAULT_IMAGE, help=f"source image (default: {DEFAULT_IMAGE})")
+    parser.add_argument("--input", type=Path, default=DEFAULT_IMAGE, help=f"source image or SVG (default: {DEFAULT_IMAGE})")
     parser.add_argument("--width", type=float, default=400.0, help="plot/robot canvas width in coordinate units")
     parser.add_argument("--max-step", type=float, default=1.0, help="maximum distance per movement")
     parser.add_argument("--pixel-width", type=int, default=400, help="processing canvas width in pixels")
     parser.add_argument("--pixel-height", type=int, default=600, help="processing canvas height in pixels")
+    parser.add_argument("--pen-up-z", type=float, default=1.0, help="Z coordinate for a lifted pen")
+    parser.add_argument("--pen-down-z", type=float, default=0.0, help="Z coordinate for a lowered pen")
+    parser.add_argument(
+        "--output-root",
+        type=Path,
+        help="parent for timestamped run folders (default: input directory)",
+    )
+
+
+def create_run_directory(input_path: Path, output_root: Path | None = None) -> Path:
+    """Create a unique, timestamped output directory for one image run."""
+
+    root = output_root if output_root is not None else input_path.parent
+    timestamp = datetime.now().astimezone().strftime("%Y%m%d-%H%M%S")
+    base = root / f"{input_path.stem}-{timestamp}"
+    candidate = base
+    index = 2
+    while True:
+        try:
+            candidate.mkdir(parents=True)
+            return candidate
+        except FileExistsError:
+            candidate = Path(f"{base}-{index}")
+            index += 1
 
 
 def run_draw_command(args: argparse.Namespace) -> None:
     started = perf_counter()
-    with TemporaryDirectory(prefix="doodle-bot-") as temporary_directory:
-        csv_path = Path(temporary_directory) / "movements.csv"
-        try:
-            result = trace_image_to_csv(
+    if not args.input.is_file():
+        raise SystemExit(f"Input file does not exist: {args.input}")
+    run_directory = create_run_directory(args.input, args.output_root)
+    stem = args.input.stem
+    svg_path = run_directory / f"{stem}.svg"
+    gcode_path = run_directory / f"{stem}.gcode"
+    so101_path = run_directory / f"{stem}.json"
+    try:
+        if args.input.suffix.lower() == ".svg":
+            shutil.copyfile(args.input, svg_path)
+            canvas_width, canvas_height = read_svg_canvas_size(svg_path)
+            source_step = "SVG"
+        else:
+            result = trace_image_to_svg(
                 args.input,
-                csv_path,
+                svg_path,
                 pixel_width=args.pixel_width,
                 pixel_height=args.pixel_height,
                 coordinate_width=args.width,
                 max_step=args.max_step,
             )
-            # Intentionally read the generated file back: the GUI consumes the
-            # same CSV contract a robot or standalone renderer receives.
-            moves = read_moves_csv(csv_path)
-        except ValueError as error:
-            raise SystemExit(str(error)) from error
-        height = args.width * result.canvas_height / result.canvas_width
-        print(
-            f"Image: {args.input} | internal CSV commands loaded | "
-            f"canvas: {result.canvas_width}x{result.canvas_height} | moves: {len(moves)}"
+            canvas_width = args.width
+            canvas_height = args.width * result.canvas_height / result.canvas_width
+            source_step = "Image -> SVG"
+        svg_to_gcode(
+            svg_path,
+            gcode_path,
+            max_step=args.max_step,
+            pen_up_z=args.pen_up_z,
+            pen_down_z=args.pen_down_z,
         )
-        interactive_plot(moves, args.width, height, started)
+        gcode_to_so101(
+            gcode_path,
+            so101_path,
+            name=stem,
+            pen_up_z=args.pen_up_z,
+            pen_down_z=args.pen_down_z,
+        )
+        # Intentionally read the generated file back: the GUI consumes the
+        # same G-code contract a robot or standalone renderer receives.
+        moves = read_moves_gcode(
+            gcode_path,
+            pen_up_z=args.pen_up_z,
+            pen_down_z=args.pen_down_z,
+        )
+    except ValueError as error:
+        raise SystemExit(str(error)) from error
+    print(
+        f"Input: {args.input} | {source_step} -> G-code -> SO-101 JSON | "
+        f"canvas: {canvas_width:g}x{canvas_height:g} | moves: {len(moves)}\n"
+        f"Wrote {run_directory}"
+    )
+    interactive_plot(moves, canvas_width, canvas_height, started)
 
 
 def main() -> None:

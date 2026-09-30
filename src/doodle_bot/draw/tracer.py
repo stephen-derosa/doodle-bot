@@ -6,12 +6,12 @@ import argparse
 from dataclasses import dataclass
 from pathlib import Path
 from time import perf_counter
-from typing import Iterable, Sequence
+from typing import Sequence
 
 import numpy as np
 from PIL import Image
 
-from .motion import Move
+from .motion import Move, paths_to_moves
 
 
 DEFAULT_IMAGE = Path("images/char.png")
@@ -223,17 +223,27 @@ def optimize_stroke_order(
     return ordered
 
 
-def _interpolate(start: tuple[float, float], end: tuple[float, float], max_step: float) -> Iterable[tuple[float, float]]:
-    distance = float(np.hypot(end[0] - start[0], end[1] - start[1]))
-    if distance == 0:
-        return
-    count = max(1, int(np.ceil(distance / max_step)))
-    for index in range(1, count + 1):
-        fraction = index / count
-        yield (
-            start[0] + (end[0] - start[0]) * fraction,
-            start[1] + (end[1] - start[1]) * fraction,
-        )
+def strokes_to_paths(
+    strokes: Sequence[Sequence[tuple[int, int]]],
+    image_shape: tuple[int, int],
+    width: float = 400.0,
+) -> list[list[tuple[float, float]]]:
+    """Order pixel strokes and scale them into bottom-left plot coordinates."""
+
+    if width <= 0:
+        raise ValueError("width must be positive")
+    rows, columns = image_shape
+    scale = width / max(columns, 1)
+
+    def robot_point(pixel: tuple[int, int]) -> tuple[float, float]:
+        row, column = pixel
+        return column * scale, (rows - 1 - row) * scale
+
+    return [
+        [robot_point(pixel) for pixel in stroke]
+        for stroke in optimize_stroke_order(strokes, image_shape)
+        if stroke
+    ]
 
 
 def strokes_to_moves(
@@ -244,37 +254,10 @@ def strokes_to_moves(
 ) -> list[Move]:
     """Scale pixel strokes to robot units and limit every XY movement."""
 
-    if width <= 0 or max_step <= 0:
-        raise ValueError("width and max_step must be positive")
-    rows, columns = image_shape
-    # Treat each image pixel as one coordinate cell. With the default
-    # 400x600 mask and width, this produces a 0..400 by 0..600 plot grid.
-    scale = width / max(columns, 1)
-
-    def robot_point(pixel: tuple[int, int]) -> tuple[float, float]:
-        row, column = pixel
-        return column * scale, (rows - 1 - row) * scale
-
-    moves: list[Move] = []
-    current = (0.0, 0.0)
-    for stroke in optimize_stroke_order(strokes, image_shape):
-        if not stroke:
-            continue
-        start = robot_point(stroke[0])
-        for point in _interpolate(current, start, max_step):
-            moves.append(Move(*point, pen_down=False))
-        current = start
-        # Mark the contact point explicitly before drawing the first segment.
-        moves.append(Move(*current, pen_down=True))
-        for pixel in stroke[1:]:
-            target = robot_point(pixel)
-            for point in _interpolate(current, target, max_step):
-                moves.append(Move(*point, pen_down=True))
-            current = target
-    return moves
+    return paths_to_moves(strokes_to_paths(strokes, image_shape, width), max_step)
 
 
-def trace_image_to_csv(
+def trace_image_to_svg(
     input_path: Path,
     output_path: Path,
     *,
@@ -283,22 +266,31 @@ def trace_image_to_csv(
     coordinate_width: float = 400.0,
     max_step: float = 1.0,
 ) -> TraceResult:
-    """Run the full line algorithm and write its command stream to CSV."""
+    """Run the line algorithm and write ordered centerline strokes as SVG."""
 
-    from .path_csv import write_moves_csv
+    from .path_svg import write_paths_svg
 
     if not input_path.is_file():
         raise ValueError(f"Input image does not exist: {input_path}")
     mask = image_to_mask(input_path, pixel_width, pixel_height)
     strokes = mask_to_strokes(mask)
-    moves = strokes_to_moves(strokes, mask.shape, coordinate_width, max_step)
-    write_moves_csv(output_path, moves)
+    paths = strokes_to_paths(strokes, mask.shape, coordinate_width)
+    moves = paths_to_moves(paths, max_step)
+    coordinate_height = coordinate_width * mask.shape[0] / mask.shape[1]
+    plot_y_max = coordinate_width * (mask.shape[0] - 1) / mask.shape[1]
+    write_paths_svg(
+        output_path,
+        paths,
+        width=coordinate_width,
+        height=coordinate_height,
+        plot_y_max=plot_y_max,
+    )
     return TraceResult(mask.shape[1], mask.shape[0], len(strokes), tuple(moves))
 
 
 def add_trace_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--input", type=Path, default=DEFAULT_IMAGE, help=f"source image (default: {DEFAULT_IMAGE})")
-    parser.add_argument("--output", required=True, type=Path, help="destination movement CSV")
+    parser.add_argument("--output", required=True, type=Path, help="destination centerline SVG")
     parser.add_argument("--width", type=float, default=400.0, help="robot canvas width in coordinate units")
     parser.add_argument("--max-step", type=float, default=1.0, help="maximum distance per movement")
     parser.add_argument("--pixel-width", type=int, default=400, help="processing canvas width in pixels")
@@ -308,7 +300,7 @@ def add_trace_arguments(parser: argparse.ArgumentParser) -> None:
 def run_trace_command(args: argparse.Namespace) -> None:
     started = perf_counter()
     try:
-        result = trace_image_to_csv(
+        result = trace_image_to_svg(
             args.input,
             args.output,
             pixel_width=args.pixel_width,

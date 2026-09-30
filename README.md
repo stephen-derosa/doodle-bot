@@ -36,27 +36,62 @@ python3 -m doodle_bot.cli run \
 The input must be an image. Replace the placeholder stages with real model and
 vectorizer implementations before production use.
 
-## Image-to-CSV drawing
+## Image-to-SVG-to-G-code drawing
 
 All drawing implementation code lives in `src/doodle_bot/draw/`. The image
-algorithm and GUI renderer are separate. First convert the bundled line art
-into robot-friendly CSV movements:
+algorithm, vector format, G-code conversion, and GUI renderer are separate.
+First trace the bundled line art into ordered centerline SVG strokes:
 
 ```bash
-uv run doodle-bot trace --input images/char.png --output char.csv
+uv run doodle-bot trace --input images/char.png --output char.svg
 ```
 
-Render an existing CSV with the interactive GUI:
+Convert the SVG to absolute-position robot G-code:
 
 ```bash
-uv run doodle-bot render --input char.csv
+uv run doodle-bot svg-to-gcode --input char.svg --output char.gcode
 ```
 
-For the usual one-shot workflow, `draw` traces the image to a temporary CSV,
-reads that CSV back through the same parser, and starts the GUI:
+Convert that G-code into the JSON drawing format consumed by the SO-101 app:
+
+```bash
+uv run doodle-bot gcode-to-so101 \
+  --input char.gcode \
+  --output robot/assets/char.json
+cd robot && uv run doodle preview assets/char.json
+```
+
+The JSON contains millimetre pen-down polylines. The SO-101 planner fits them
+to its configured canvas and performs the calibration-dependent inverse
+kinematics when previewing or drawing.
+
+The converter accepts SVG paths and standard vector shapes, including lines,
+polylines, polygons, rectangles, circles, ellipses, cubic/quadratic Béziers,
+and arcs. It applies nested SVG transforms, adaptively flattens curves, then
+orients and reorders strokes with nearest-endpoint routing plus 2-opt to reduce
+pen-up travel. G-code movement spacing remains bounded by `--max-step`.
+
+Render existing G-code with the interactive GUI:
+
+```bash
+uv run doodle-bot render --input char.gcode
+```
+
+For the usual one-shot workflow, `draw` runs all three conversions, retains
+their output, reads the G-code back through the same parser, and starts the
+GUI. Each invocation creates an `<image>-<timestamp>` folder beside the input
+(or below `--output-root`) containing same-stem SVG, G-code, and SO-101 JSON:
 
 ```bash
 uv run doodle-bot draw --input images/char.png
+# writes images/char-20260930-143900/{char.svg,char.gcode,char.json}
+```
+
+An SVG can also be supplied directly. In that case `draw` preserves the input
+SVG in the run folder and starts at the SVG-to-G-code step:
+
+```bash
+uv run doodle-bot draw --input images/doodle.svg
 ```
 
 The default input is `images/char.png`, fitted proportionally into a
@@ -66,26 +101,29 @@ while every executed coordinate is printed to the console. Red Xs mark pen
 lifts and green Xs mark where drawing resumes. Strokes are ordered and reversed
 using nearest-endpoint routing followed by 2-opt route improvement to avoid
 unnecessary pen-up travel. The console also reports the complete preparation
-time from image loading through CSV generation. Use `trace --help` and
-`render --help` for image-processing and standalone renderer options. Use
-`draw --help` for the one-shot workflow.
+time from image loading through SVG, G-code, and SO-101 JSON generation. Use
+`trace --help`, `svg-to-gcode --help`, `gcode-to-so101 --help`, and
+`render --help` for individual stages. Use `draw --help` for the one-shot
+workflow.
 
-The CSV is a sequential robot command stream. It starts with the pen up, emits
-coordinates under the current pen state, and includes `pos` only when that
-state changes:
+The generated stream starts with `G90` for absolute positioning. Every
+subsequent instruction is a `G1`: XY instructions move the tool and Z
+instructions lift or lower the pen. The default is Z1 for up and Z0 for down;
+use `--pen-up-z` and `--pen-down-z` to match the target machine.
 
-```csv
-pos,up
-coord,120.000000,250.000000
-coord,121.000000,250.000000
-pos,down
-coord,121.000000,250.000000
-coord,122.000000,251.000000
-pos,up
+```gcode
+G90
+G1 Z1.000000
+G1 X120.000000 Y250.000000
+G1 X121.000000 Y250.000000
+G1 Z0.000000
+G1 X121.000000 Y250.000000
+G1 X122.000000 Y251.000000
+G1 Z1.000000
 ```
 
-Generated streams always begin and end with `pos,up`, leaving the robot in a
-safe pen-lifted state.
+Generated streams always begin and end with the configured pen-up Z state,
+leaving the robot in a safe pen-lifted state.
 
 Plot controls:
 

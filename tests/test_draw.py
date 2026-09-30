@@ -1,10 +1,13 @@
 import unittest
+from argparse import Namespace
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 import numpy as np
 from PIL import Image
 
+from doodle_bot.draw.drawing import run_draw_command
 from doodle_bot.draw.tracer import image_to_mask, mask_to_strokes, optimize_stroke_order, strokes_to_moves
 
 
@@ -45,6 +48,69 @@ class DrawingTests(unittest.TestCase):
         self.assertEqual(ordered[0], [(9, 2), (9, 3)])
         self.assertEqual(ordered[1], [(9, 8), (9, 9)])
         self.assertEqual(ordered[2], [(0, 9), (0, 8)])
+
+    def test_draw_persists_all_pipeline_assets_in_timestamped_folder(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            input_path = Path(temporary_directory) / "iteration.png"
+            image = Image.new("L", (5, 5), color=255)
+            image.putpixel((2, 2), 0)
+            image.save(input_path)
+            args = Namespace(
+                input=input_path,
+                width=5.0,
+                max_step=1.0,
+                pixel_width=5,
+                pixel_height=5,
+                pen_up_z=1.0,
+                pen_down_z=0.0,
+                output_root=None,
+            )
+            with patch("doodle_bot.draw.drawing.interactive_plot"):
+                run_draw_command(args)
+            run_directories = list(Path(temporary_directory).glob("iteration-*"))
+            self.assertEqual(len(run_directories), 1)
+            run_directory = run_directories[0]
+            self.assertTrue(run_directory.is_dir())
+            self.assertTrue((run_directory / "iteration.svg").is_file())
+            self.assertEqual(
+                (run_directory / "iteration.gcode").read_text().splitlines()[0],
+                "G90",
+            )
+            self.assertTrue((run_directory / "iteration.json").is_file())
+
+    def test_draw_skips_tracing_for_svg_input(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            input_path = root / "sketch.svg"
+            source = (
+                '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 10">'
+                '<polyline points="1,2 3,4"/></svg>'
+            )
+            input_path.write_text(source)
+            args = Namespace(
+                input=input_path,
+                width=5.0,
+                max_step=1.0,
+                pixel_width=5,
+                pixel_height=5,
+                pen_up_z=1.0,
+                pen_down_z=0.0,
+                output_root=None,
+            )
+
+            with (
+                patch("doodle_bot.draw.drawing.trace_image_to_svg") as trace,
+                patch("doodle_bot.draw.drawing.interactive_plot") as plot,
+            ):
+                run_draw_command(args)
+
+            trace.assert_not_called()
+            plot.assert_called_once()
+            self.assertEqual(plot.call_args.args[1:3], (20.0, 10.0))
+            run_directory = next(root.glob("sketch-*"))
+            self.assertEqual((run_directory / "sketch.svg").read_text(), source)
+            self.assertTrue((run_directory / "sketch.gcode").is_file())
+            self.assertTrue((run_directory / "sketch.json").is_file())
 
 
 if __name__ == "__main__":

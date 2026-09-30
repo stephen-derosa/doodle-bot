@@ -1,4 +1,4 @@
-"""Render a DoodleBot movement CSV with interactive playback controls."""
+"""Render DoodleBot movement G-code with interactive playback controls."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from typing import Sequence
 import numpy as np
 
 from .motion import Move
-from .path_csv import read_moves_csv
+from .path_gcode import read_moves_gcode
 
 
 FAST_TIMER_INTERVAL_MS = 1
@@ -24,7 +24,7 @@ def interactive_plot(
     preparation_started: float | None = None,
     step_delay: float = SLOW_STEP_DELAY,
 ) -> None:
-    """Play CSV movements with the existing keyboard controls and styling."""
+    """Play G-code movements with the existing keyboard controls and styling."""
 
     import matplotlib.pyplot as plt
 
@@ -183,7 +183,7 @@ def interactive_plot(
     update_title("paused")
     figure.canvas.draw()
     if preparation_started is not None:
-        print(f"Preparation time (CSV load -> plot ready): {perf_counter() - preparation_started:.3f} seconds")
+        print(f"Preparation time (G-code load -> plot ready): {perf_counter() - preparation_started:.3f} seconds")
     print(
         f"Ready: {len(moves)} movements in maximum-speed mode.\n"
         "Controls: SPACE play/pause | LEFT slow restart | UP/DOWN paced speed | H show/hide step points"
@@ -192,22 +192,28 @@ def interactive_plot(
 
 
 def add_render_arguments(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--input", required=True, type=Path, help="movement CSV to render")
+    parser.add_argument("--input", required=True, type=Path, help="movement G-code to render")
     parser.add_argument("--width", type=float, default=400.0, help="plot width in coordinate units")
     parser.add_argument("--height", type=float, default=600.0, help="plot height in coordinate units")
+    parser.add_argument("--pen-up-z", type=float, default=1.0, help="Z coordinate for a lifted pen")
+    parser.add_argument("--pen-down-z", type=float, default=0.0, help="Z coordinate for a lowered pen")
 
 
 def run_render_command(args: argparse.Namespace) -> None:
     if not args.input.is_file():
-        raise SystemExit(f"Input CSV does not exist: {args.input}")
+        raise SystemExit(f"Input G-code does not exist: {args.input}")
     if args.width <= 0 or args.height <= 0:
         raise SystemExit("width and height must be positive")
     started = perf_counter()
     try:
-        moves = read_moves_csv(args.input)
+        moves = read_moves_gcode(
+            args.input,
+            pen_up_z=args.pen_up_z,
+            pen_down_z=args.pen_down_z,
+        )
     except ValueError as error:
-        raise SystemExit(f"Invalid movement CSV: {error}") from error
-    print(f"CSV: {args.input} | canvas: {args.width:g}x{args.height:g} | moves: {len(moves)}")
+        raise SystemExit(f"Invalid movement G-code: {error}") from error
+    print(f"G-code: {args.input} | canvas: {args.width:g}x{args.height:g} | moves: {len(moves)}")
     interactive_plot(moves, args.width, args.height, started)
 
 
