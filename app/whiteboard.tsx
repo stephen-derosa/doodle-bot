@@ -2,8 +2,14 @@
 
 import { useEffect, useRef } from "react";
 
-const WIDTH = 1000;
-const HEIGHT = 700;
+const PX_PER_MM = 5;
+
+const WIDTH_MM = 100;
+const HEIGHT_MM = 150;
+
+const WIDTH_PX = WIDTH_MM * PX_PER_MM;
+const HEIGHT_PX = HEIGHT_MM * PX_PER_MM;
+
 
 export default function Whiteboard() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -21,8 +27,8 @@ export default function Whiteboard() {
   function getPoint(e: React.PointerEvent<HTMLCanvasElement>) {
     const rect = e.currentTarget.getBoundingClientRect();
     return {
-      x: ((e.clientX - rect.left) * WIDTH) / rect.width,
-      y: ((e.clientY - rect.top) * HEIGHT) / rect.height,
+      x: ((e.clientX - rect.left) * WIDTH_PX) / rect.width,
+      y: (((e.clientY - rect.top) * HEIGHT_PX) / rect.height),
     };
   }
 
@@ -39,10 +45,20 @@ export default function Whiteboard() {
   function handlePointerMove(e: React.PointerEvent<HTMLCanvasElement>) {
     if (!isDrawing.current) return;
     const ctx = e.currentTarget.getContext("2d");
-    if (!ctx) return;
+    if (!ctx) {
+      return;
+    }
+
     const { x, y } = getPoint(e);
-    // Log with the origin at the lower-left corner (y increases upward)
-    console.log(`x: ${Math.round(x)}, y: ${Math.round(HEIGHT - y)}`);
+
+    const xInMm = x / PX_PER_MM;
+    const yInMm = (HEIGHT_PX - y) / PX_PER_MM;
+
+    const xInMmBounded = Math.min(Math.max(0, xInMm), WIDTH_PX);
+    const yInMmBounded = Math.min(Math.max(0, yInMm), HEIGHT_PX);
+
+    console.log(`x ${Math.round(xInMmBounded)}, y: ${Math.round(yInMmBounded)}`);
+
     ctx.lineTo(x, y);
     ctx.stroke();
   }
@@ -54,13 +70,14 @@ export default function Whiteboard() {
   return (
     <canvas
       ref={canvasRef}
-      width={WIDTH}
-      height={HEIGHT}
+      width={WIDTH_PX}
+      height={HEIGHT_PX}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
-      className="w-full max-w-[1000px] aspect-[10/7] bg-white border border-zinc-300 shadow-sm touch-none cursor-crosshair"
+      className="w-full bg-white border border-zinc-300 shadow-sm touch-none cursor-crosshair"
+      style={{ width: WIDTH_PX, height: HEIGHT_PX }}
     />
   );
 }
