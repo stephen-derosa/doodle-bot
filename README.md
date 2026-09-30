@@ -36,6 +36,64 @@ python3 -m doodle_bot.cli run \
 The input must be an image. Replace the placeholder stages with real model and
 vectorizer implementations before production use.
 
+## Image-to-CSV drawing
+
+All drawing implementation code lives in `src/doodle_bot/draw/`. The image
+algorithm and GUI renderer are separate. First convert the bundled line art
+into robot-friendly CSV movements:
+
+```bash
+uv run doodle-bot trace --input images/char.png --output char.csv
+```
+
+Render an existing CSV with the interactive GUI:
+
+```bash
+uv run doodle-bot render --input char.csv
+```
+
+For the usual one-shot workflow, `draw` traces the image to a temporary CSV,
+reads that CSV back through the same parser, and starts the GUI:
+
+```bash
+uv run doodle-bot draw --input images/char.png
+```
+
+The default input is `images/char.png`, fitted proportionally into a
+400×600-pixel portrait canvas with matching 0–400 by 0–600 plot coordinates.
+The plot shows pen-down points in black above the orange pen-up travel history,
+while every executed coordinate is printed to the console. Red Xs mark pen
+lifts and green Xs mark where drawing resumes. Strokes are ordered and reversed
+using nearest-endpoint routing followed by 2-opt route improvement to avoid
+unnecessary pen-up travel. The console also reports the complete preparation
+time from image loading through CSV generation. Use `trace --help` and
+`render --help` for image-processing and standalone renderer options. Use
+`draw --help` for the one-shot workflow.
+
+The CSV is a sequential robot command stream. It starts with the pen up, emits
+coordinates under the current pen state, and includes `pos` only when that
+state changes:
+
+```csv
+pos,up
+coord,120.000000,250.000000
+coord,121.000000,250.000000
+pos,down
+coord,121.000000,250.000000
+coord,122.000000,251.000000
+pos,up
+```
+
+Generated streams always begin and end with `pos,up`, leaving the robot in a
+safe pen-lifted state.
+
+Plot controls:
+
+- Space: play or pause
+- Up/Down: switch to paced mode and increase or decrease drawing speed
+- Left: restart from a blank plot and immediately replay at 0.1 seconds/step
+- H: show or hide orange travel points and red/green pen markers
+
 ## Adding a scene effect or replacing a model
 
 Model profiles live in `configs/models.toml`. Add a profile and set the

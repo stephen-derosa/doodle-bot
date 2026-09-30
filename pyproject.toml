@@ -7,7 +7,11 @@ name = "doodle-bot"
 version = "0.1.0"
 description = "Extensible photo-to-caricature-to-line-art pipeline"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "matplotlib>=3.8",
+    "numpy>=1.26",
+    "Pillow>=10.0",
+]
 
 [project.scripts]
 doodle-bot = "doodle_bot.cli:main"
