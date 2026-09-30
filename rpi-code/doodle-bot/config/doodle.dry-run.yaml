@@ -3,45 +3,50 @@ baud: 1000000
 joints:
 - name: shoulder_pan
   id: 1
-  min_rad: -1.91986
-  max_rad: 1.91986
-  min_ticks: 100
-  max_ticks: 3995
+  min_rad: -1.8876464034544014
+  max_rad: 1.9520735965455984
+  min_ticks: 1028
+  max_ticks: 3437
+  travel_measured: true
 - name: shoulder_lift
   id: 2
-  min_rad: -1.74533
-  max_rad: 1.74533
-  min_ticks: 100
-  max_ticks: 3995
+  min_rad: -1.423449016239424
+  max_rad: 2.0672109837605763
+  min_ticks: 1054
+  max_ticks: 3226
+  travel_measured: true
 - name: elbow_flex
   id: 3
-  min_rad: -1.69
-  max_rad: 1.69
-  min_ticks: 100
-  max_ticks: 3995
+  min_rad: -2.0259090676234806
+  max_rad: 1.3540909323765193
+  min_ticks: 868
+  max_ticks: 3025
+  travel_measured: true
 - name: wrist_flex
   id: 4
-  min_rad: -1.65806
-  max_rad: 1.65806
-  min_ticks: 100
-  max_ticks: 3995
+  min_rad: -3.151935030628681
+  max_rad: 0.16418496937131938
+  min_ticks: 895
+  max_ticks: 3210
+  travel_measured: true
 - name: wrist_roll
   id: 5
-  min_rad: -2.74385
-  max_rad: 2.84121
-  min_ticks: 100
-  max_ticks: 3995
+  min_rad: -2.7515199039394287
+  max_rad: 2.8335400960605712
+  min_ticks: 46
+  max_ticks: 1199
+  travel_measured: true
 geometry:
   lift_r: 30.4
   lift_z: 116.6
   a1: 116.0
   a2: 135.0
   a3: 61.1
-  zero_angle1_deg: 94.482421875
-  zero_angle2_deg: 1.4062499999999951
-  zero_angle3_deg: -86.396484375
+  zero_angle1_deg: 95.537109375
+  zero_angle2_deg: 2.109374999999993
+  zero_angle3_deg: -91.23046875
 tool:
-  along: 100.0
+  along: 92.86874999999999
   perp: 0.0
   lateral: 0.0
   roll_rad: 0.0

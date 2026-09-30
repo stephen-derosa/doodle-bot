@@ -1,4 +1,4 @@
-port: /dev/serial/by-id/usb-1a86_USB_Single_Serial_5B61034319-if00
+port:  /dev/cu.usbmodem5B610343191
 baud: 1000000
 joints:
 - name: shoulder_pan
